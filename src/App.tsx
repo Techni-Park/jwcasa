@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Home from "./pages/Home";
 import RapportForm from "./pages/RapportForm";
 import InscriptionForm from "./pages/InscriptionForm";
+import ProclamateursGestion from "./pages/ProclamateursGestion";
 import AdminPanel from "./pages/AdminPanel";
 import NotFound from "./pages/NotFound";
 
@@ -21,6 +22,7 @@ const App = () => (
           <Route path="/" element={<Home />} />
           <Route path="/rapport" element={<RapportForm />} />
           <Route path="/inscription" element={<InscriptionForm />} />
+          <Route path="/proclamateurs" element={<ProclamateursGestion />} />
           <Route path="/admin" element={<AdminPanel />} />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />

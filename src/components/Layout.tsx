@@ -15,6 +15,7 @@ const Layout = ({ children, title }: LayoutProps) => {
     { path: '/', label: 'Accueil', icon: '🏠' },
     { path: '/rapport', label: 'Rapport', icon: '📝' },
     { path: '/inscription', label: 'Inscription', icon: '📅' },
+    { path: '/proclamateurs', label: 'Membres', icon: '👥' },
     { path: '/admin', label: 'Admin', icon: '👨‍💼' },
   ];
 

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Layout from '@/components/Layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -10,13 +10,23 @@ import { useToast } from '@/hooks/use-toast';
 
 const InscriptionForm = () => {
   const { toast } = useToast();
+  const [proclamateurs, setProclamateurs] = useState<any[]>([]);
   const [formData, setFormData] = useState({
     date: '',
     creneau: '',
-    nom: '',
-    sexe: '',
+    proclamateurId: '',
     type: 'diffusion' // diffusion ou installation
   });
+
+  useEffect(() => {
+    loadProclamateurs();
+  }, []);
+
+  const loadProclamateurs = () => {
+    const saved = JSON.parse(localStorage.getItem('proclamateurs') || '[]');
+    const actifs = saved.filter((p: any) => p.actif);
+    setProclamateurs(actifs);
+  };
 
   const creneaux = [
     { value: '8h-9h30', label: '8h00 - 9h30' },
@@ -50,14 +60,28 @@ const InscriptionForm = () => {
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
+  const getSelectedProclamateur = () => {
+    return proclamateurs.find(p => p.id.toString() === formData.proclamateurId);
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
     // Validation
-    if (!formData.date || !formData.creneau || !formData.nom || !formData.sexe) {
+    if (!formData.date || !formData.creneau || !formData.proclamateurId) {
       toast({
         title: "Erreur",
         description: "Veuillez remplir tous les champs",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const selectedProclamateur = getSelectedProclamateur();
+    if (!selectedProclamateur) {
+      toast({
+        title: "Erreur",
+        description: "Proclamateur non trouvé",
         variant: "destructive"
       });
       return;
@@ -71,7 +95,7 @@ const InscriptionForm = () => {
     const currentYear = new Date(formData.date).getFullYear();
     const inscriptionsPersonne = inscriptions.filter((ins: any) => {
       const insDate = new Date(ins.date);
-      return ins.nom.toLowerCase() === formData.nom.toLowerCase() &&
+      return ins.proclamateurId === formData.proclamateurId &&
              insDate.getMonth() === currentMonth &&
              insDate.getFullYear() === currentYear &&
              ins.statut === 'valide';
@@ -114,6 +138,8 @@ const InscriptionForm = () => {
     const newInscription = {
       id: Date.now(),
       ...formData,
+      nom: `${selectedProclamateur.prenom} ${selectedProclamateur.nom}`,
+      sexe: selectedProclamateur.sexe,
       statut: 'en_attente',
       createdAt: new Date().toISOString()
     };
@@ -130,8 +156,7 @@ const InscriptionForm = () => {
     setFormData({
       date: '',
       creneau: '',
-      nom: '',
-      sexe: '',
+      proclamateurId: '',
       type: 'diffusion'
     });
   };
@@ -163,37 +188,37 @@ const InscriptionForm = () => {
           </CardContent>
         </Card>
 
-        {/* Informations personnelles */}
+        {/* Sélection du proclamateur */}
         <Card className="gradient-card shadow-soft border-border/50">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-foreground">
               <span className="text-xl">👤</span>
-              Informations personnelles
+              Sélection du proclamateur
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
-              <Label htmlFor="nom">Nom complet *</Label>
-              <Input
-                id="nom"
-                value={formData.nom}
-                onChange={(e) => handleInputChange('nom', e.target.value)}
-                placeholder="Votre nom complet"
-                required
-              />
-            </div>
-            <div>
-              <Label>Sexe *</Label>
-              <RadioGroup value={formData.sexe} onValueChange={(value) => handleInputChange('sexe', value)}>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="homme" id="homme" />
-                  <Label htmlFor="homme">Homme</Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="femme" id="femme" />
-                  <Label htmlFor="femme">Femme</Label>
-                </div>
-              </RadioGroup>
+              <Label htmlFor="proclamateur">Proclamateur *</Label>
+              <Select value={formData.proclamateurId} onValueChange={(value) => handleInputChange('proclamateurId', value)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Sélectionner un proclamateur" />
+                </SelectTrigger>
+                <SelectContent>
+                  {proclamateurs.map((proclamateur) => (
+                    <SelectItem key={proclamateur.id} value={proclamateur.id.toString()}>
+                      <div className="flex items-center gap-2">
+                        <span>{proclamateur.sexe === 'homme' ? '👨' : '👩'}</span>
+                        <span>{proclamateur.prenom} {proclamateur.nom}</span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {proclamateurs.length === 0 && (
+                <p className="text-sm text-muted-foreground mt-2">
+                  Aucun proclamateur actif. Contactez l'administrateur.
+                </p>
+              )}
             </div>
           </CardContent>
         </Card>
