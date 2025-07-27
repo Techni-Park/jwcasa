@@ -5,6 +5,7 @@ import PlanningMensuel from '@/components/PlanningMensuel';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Link } from 'react-router-dom';
 
 const Home = () => {
@@ -78,103 +79,113 @@ const Home = () => {
         </Card>
       </div>
 
-      {/* Sélecteur de mois */}
-      <Card className="gradient-card shadow-soft border-border/50 mb-6">
-        <CardContent className="p-4">
-          <div className="flex items-center gap-4">
-            <span className="text-sm font-medium">Statistiques pour:</span>
-            <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-              <SelectTrigger className="w-48">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {generateMonthOptions().map(option => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Accordéon Statistiques */}
+      <Accordion type="single" collapsible className="mb-6">
+        <AccordionItem value="stats" className="border rounded-lg gradient-card shadow-soft border-border/50">
+          <AccordionTrigger className="px-4 py-3 hover:no-underline">
+            <div className="flex items-center gap-3">
+              <span className="text-lg">📊</span>
+              <span className="font-medium">Voir les chiffres du mois</span>
+            </div>
+          </AccordionTrigger>
+          <AccordionContent className="px-4 pb-4">
+            <div className="flex items-center gap-4 mb-4">
+              <span className="text-sm font-medium">Statistiques pour:</span>
+              <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                <SelectTrigger className="w-48">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {generateMonthOptions().map(option => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <StatsCard
+                title="Rapports ce mois"
+                value={stats.totalRapports}
+                icon={<span className="text-lg">📊</span>}
+                color="primary"
+                trend={`${new Date(selectedMonth + '-01').toLocaleDateString('fr-FR', { month: 'long' })}`}
+              />
+              <StatsCard
+                title="Conversations"
+                value={stats.conversationsTotal}
+                icon={<span className="text-lg">💬</span>}
+                color="secondary"
+                trend={`${new Date(selectedMonth + '-01').toLocaleDateString('fr-FR', { month: 'long' })}`}
+              />
+              <StatsCard
+                title="Vidéos montrées"
+                value={stats.videosTotal}
+                icon={<span className="text-lg">🎥</span>}
+                color="accent"
+                trend={`${new Date(selectedMonth + '-01').toLocaleDateString('fr-FR', { month: 'long' })}`}
+              />
+              <StatsCard
+                title="Publications"
+                value={stats.publicationsTotal}
+                icon={<span className="text-lg">📚</span>}
+                color="success"
+                trend="Distribuées"
+              />
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
 
-      {/* Statistiques mensuelles */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        <StatsCard
-          title="Rapports ce mois"
-          value={stats.totalRapports}
-          icon={<span className="text-lg">📊</span>}
-          color="primary"
-          trend={`${new Date(selectedMonth + '-01').toLocaleDateString('fr-FR', { month: 'long' })}`}
-        />
-        <StatsCard
-          title="Conversations"
-          value={stats.conversationsTotal}
-          icon={<span className="text-lg">💬</span>}
-          color="secondary"
-          trend={`${new Date(selectedMonth + '-01').toLocaleDateString('fr-FR', { month: 'long' })}`}
-        />
-        <StatsCard
-          title="Vidéos montrées"
-          value={stats.videosTotal}
-          icon={<span className="text-lg">🎥</span>}
-          color="accent"
-          trend={`${new Date(selectedMonth + '-01').toLocaleDateString('fr-FR', { month: 'long' })}`}
-        />
-        <StatsCard
-          title="Publications"
-          value={stats.publicationsTotal}
-          icon={<span className="text-lg">📚</span>}
-          color="success"
-          trend="Distribuées"
-        />
-      </div>
+      {/* Layout en 2 colonnes */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        {/* Planning mensuel */}
+        <div>
+          <PlanningMensuel selectedMonth={selectedMonth} onMonthChange={setSelectedMonth} />
+        </div>
 
-      {/* Actions rapides */}
-      <div className="grid gap-4 md:grid-cols-2 mb-6">
-        <Card className="gradient-card shadow-soft border-border/50 hover:shadow-medium transition-all duration-300">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-foreground">
-              <span className="text-xl">📝</span>
-              Nouveau rapport
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-muted-foreground mb-4">
-              Saisissez un nouveau rapport d'activité de diffusion
-            </p>
-            <Link to="/rapport">
-              <Button className="w-full">
-                Créer un rapport
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
+        {/* Actions rapides */}
+        <div className="space-y-4">
+          <Card className="gradient-card shadow-soft border-border/50 hover:shadow-medium transition-all duration-300">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-foreground">
+                <span className="text-xl">📝</span>
+                Nouveau rapport
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-muted-foreground mb-4">
+                Saisissez un nouveau rapport d'activité de diffusion
+              </p>
+              <Link to="/rapport">
+                <Button className="w-full">
+                  Créer un rapport
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
 
-        <Card className="gradient-card shadow-soft border-border/50 hover:shadow-medium transition-all duration-300">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-foreground">
-              <span className="text-xl">📅</span>
-              Inscription créneaux
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-muted-foreground mb-4">
-              Inscrivez-vous aux créneaux de diffusion disponibles
-            </p>
-            <Link to="/inscription">
-              <Button variant="secondary" className="w-full">
-                S'inscrire
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Planning mensuel */}
-      <div className="mb-6">
-        <PlanningMensuel selectedMonth={selectedMonth} onMonthChange={setSelectedMonth} />
+          <Card className="gradient-card shadow-soft border-border/50 hover:shadow-medium transition-all duration-300">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-foreground">
+                <span className="text-xl">📅</span>
+                Inscription créneaux
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-muted-foreground mb-4">
+                Inscrivez-vous aux créneaux de diffusion disponibles
+              </p>
+              <Link to="/inscription">
+                <Button variant="secondary" className="w-full">
+                  S'inscrire
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       {/* Alertes et notifications */}
