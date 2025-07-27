@@ -83,13 +83,18 @@ const InscriptionForm = () => {
 
   const loadTypeActivites = async () => {
     try {
+      console.log('Chargement des types d\'activité...');
       const { data, error } = await supabase
         .from('type_activite')
         .select('*')
         .eq('actif', true)
         .order('nom');
 
-      if (error) throw error;
+      console.log('Types d\'activité récupérés:', data);
+      if (error) {
+        console.error('Erreur lors du chargement des types d\'activité:', error);
+        throw error;
+      }
       setTypeActivites(data || []);
     } catch (error) {
       console.error('Erreur lors du chargement des types d\'activité:', error);
