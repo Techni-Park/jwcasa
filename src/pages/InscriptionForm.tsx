@@ -6,15 +6,22 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { CalendarIcon } from 'lucide-react';
+import { format } from 'date-fns';
+import { fr } from 'date-fns/locale';
+import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 
 const InscriptionForm = () => {
   const { toast } = useToast();
   const [proclamateurs, setProclamateurs] = useState<any[]>([]);
+  const [selectedDate, setSelectedDate] = useState<Date>();
   const [formData, setFormData] = useState({
     date: '',
     creneau: '',
-    proclamateurId: '',
+    proclamateurId: '1', // Utilisateur connecté par défaut
     type: 'diffusion' // diffusion ou installation
   });
 
@@ -58,6 +65,17 @@ const InscriptionForm = () => {
 
   const handleInputChange = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleDateSelect = (date: Date | undefined) => {
+    if (date) {
+      const isSunday = date.getDay() === 0;
+      if (isSunday) {
+        setSelectedDate(date);
+        const dateString = date.toISOString().split('T')[0];
+        handleInputChange('date', dateString);
+      }
+    }
   };
 
   const getSelectedProclamateur = () => {
@@ -156,9 +174,10 @@ const InscriptionForm = () => {
     setFormData({
       date: '',
       creneau: '',
-      proclamateurId: '',
+      proclamateurId: '1',
       type: 'diffusion'
     });
+    setSelectedDate(undefined);
   };
 
   const creneauxDisponibles = formData.date ? getCreneauxDisponibles() : [];
@@ -166,128 +185,141 @@ const InscriptionForm = () => {
   return (
     <Layout title="Inscription aux créneaux">
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Type d'activité */}
-        <Card className="gradient-card shadow-soft border-border/50">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-foreground">
-              <span className="text-xl">⚙️</span>
-              Type d'activité
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <RadioGroup value={formData.type} onValueChange={(value) => handleInputChange('type', value)}>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="diffusion" id="diffusion" />
-                <Label htmlFor="diffusion">Diffusion (2-3 personnes dont 1 homme min)</Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="installation" id="installation" />
-                <Label htmlFor="installation">Installation/Désinstallation (2 personnes max)</Label>
-              </div>
-            </RadioGroup>
-          </CardContent>
-        </Card>
+        {/* Layout en 3 colonnes */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Type d'activité */}
+          <Card className="gradient-card shadow-soft border-border/50">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-foreground">
+                <span className="text-xl">⚙️</span>
+                Type d'activité
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <RadioGroup value={formData.type} onValueChange={(value) => handleInputChange('type', value)}>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="diffusion" id="diffusion" />
+                  <Label htmlFor="diffusion">Diffusion (2-3 personnes dont 1 homme min)</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <RadioGroupItem value="installation" id="installation" />
+                  <Label htmlFor="installation">Installation/Désinstallation (2 personnes max)</Label>
+                </div>
+              </RadioGroup>
+            </CardContent>
+          </Card>
 
-        {/* Sélection du proclamateur */}
-        <Card className="gradient-card shadow-soft border-border/50">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-foreground">
-              <span className="text-xl">👤</span>
-              Sélection du proclamateur
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <Label htmlFor="proclamateur">Proclamateur *</Label>
-              <Select value={formData.proclamateurId} onValueChange={(value) => handleInputChange('proclamateurId', value)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Sélectionner un proclamateur" />
-                </SelectTrigger>
-                <SelectContent>
-                  {proclamateurs.map((proclamateur) => (
-                    <SelectItem key={proclamateur.id} value={proclamateur.id.toString()}>
-                      <div className="flex items-center gap-2">
-                        <span>{proclamateur.sexe === 'homme' ? '👨' : '👩'}</span>
-                        <span>{proclamateur.prenom} {proclamateur.nom}</span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {proclamateurs.length === 0 && (
-                <p className="text-sm text-muted-foreground mt-2">
-                  Aucun proclamateur actif. Contactez l'administrateur.
-                </p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Créneau souhaité */}
-        <Card className="gradient-card shadow-soft border-border/50">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-foreground">
-              <span className="text-xl">📅</span>
-              Créneau souhaité
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <Label htmlFor="date">Date *</Label>
-              <Input
-                id="date"
-                type="date"
-                value={formData.date}
-                onChange={(e) => handleInputChange('date', e.target.value)}
-                min={new Date().toISOString().split('T')[0]}
-                required
-              />
-            </div>
-            
-            {formData.date && (
+          {/* Créneau souhaité */}
+          <Card className="gradient-card shadow-soft border-border/50">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-foreground">
+                <span className="text-xl">📅</span>
+                Créneau souhaité
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
               <div>
-                <Label htmlFor="creneau">Créneau horaire *</Label>
-                <Select value={formData.creneau} onValueChange={(value) => handleInputChange('creneau', value)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Sélectionner un créneau" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {creneauxDisponibles.map((creneau) => (
-                      <SelectItem 
-                        key={creneau.value} 
-                        value={creneau.value}
-                        disabled={creneau.placesDisponibles <= 0}
-                      >
-                        <div className="flex justify-between items-center w-full">
-                          <span>{creneau.label}</span>
-                          <span className="text-sm text-muted-foreground ml-4">
-                            {creneau.placesDisponibles > 0 
-                              ? `${creneau.placesDisponibles} place(s)`
-                              : 'Complet'
-                            }
-                            {creneau.besoinHomme && ' - Homme souhaité'}
-                          </span>
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label htmlFor="date">Date (dimanche uniquement) *</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant={"outline"}
+                      className={cn(
+                        "w-full justify-start text-left font-normal",
+                        !selectedDate && "text-muted-foreground"
+                      )}
+                    >
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {selectedDate ? format(selectedDate, "PPP", { locale: fr }) : <span>Choisir un dimanche</span>}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0" align="start">
+                    <Calendar
+                      mode="single"
+                      selected={selectedDate}
+                      onSelect={handleDateSelect}
+                      disabled={(date) => {
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0);
+                        return date < today || date.getDay() !== 0; // Seulement les dimanches
+                      }}
+                      initialFocus
+                      className={cn("p-3 pointer-events-auto")}
+                    />
+                  </PopoverContent>
+                </Popover>
               </div>
-            )}
-          </CardContent>
-        </Card>
+              
+              {formData.date && (
+                <div>
+                  <Label htmlFor="creneau">Créneau horaire *</Label>
+                  <Select value={formData.creneau} onValueChange={(value) => handleInputChange('creneau', value)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Sélectionner un créneau" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {creneauxDisponibles.map((creneau) => (
+                        <SelectItem 
+                          key={creneau.value} 
+                          value={creneau.value}
+                          disabled={creneau.placesDisponibles <= 0}
+                        >
+                          <div className="flex justify-between items-center w-full">
+                            <span>{creneau.label}</span>
+                            <span className="text-sm text-muted-foreground ml-4">
+                              {creneau.placesDisponibles > 0 
+                                ? `${creneau.placesDisponibles} place(s)`
+                                : 'Complet'
+                              }
+                              {creneau.besoinHomme && ' - Homme souhaité'}
+                            </span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
-        {/* Informations importantes */}
-        <Card className="gradient-card shadow-soft border-border/50 border-l-4 border-l-info">
+          {/* Règles importantes */}
+          <Card className="gradient-card shadow-soft border-border/50 border-l-4 border-l-info">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-foreground">
+                <span className="text-xl">📋</span>
+                Règles importantes
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <ul className="text-sm text-muted-foreground space-y-2">
+                <li>• Maximum 2 inscriptions par mois</li>
+                <li>• Pas deux fois le même créneau dans le mois</li>
+                <li>• Diffusion: 2-3 personnes dont au moins 1 homme</li>
+                <li>• Installation: 2 personnes maximum</li>
+                <li>• Validation requise par l'administrateur</li>
+                <li>• Seulement les dimanches</li>
+              </ul>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Utilisateur connecté */}
+        <Card className="gradient-card shadow-soft border-border/50 bg-secondary/20">
           <CardContent className="p-4">
-            <h3 className="font-semibold text-foreground mb-2">📋 Règles importantes</h3>
-            <ul className="text-sm text-muted-foreground space-y-1">
-              <li>• Maximum 2 inscriptions par mois</li>
-              <li>• Pas deux fois le même créneau dans le mois</li>
-              <li>• Diffusion: 2-3 personnes dont au moins 1 homme</li>
-              <li>• Installation: 2 personnes maximum</li>
-              <li>• Validation requise par l'administrateur</li>
-            </ul>
+            <div className="flex items-center gap-3">
+              <span className="text-xl">👤</span>
+              <div>
+                <h3 className="font-semibold text-foreground">Utilisateur connecté</h3>
+                <p className="text-sm text-muted-foreground">
+                  {proclamateurs.find(p => p.id.toString() === formData.proclamateurId)?.prenom}{' '}
+                  {proclamateurs.find(p => p.id.toString() === formData.proclamateurId)?.nom}
+                  {proclamateurs.find(p => p.id.toString() === formData.proclamateurId)?.sexe && 
+                    ` (${proclamateurs.find(p => p.id.toString() === formData.proclamateurId)?.sexe})`
+                  }
+                </p>
+              </div>
+            </div>
           </CardContent>
         </Card>
 
