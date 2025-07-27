@@ -242,8 +242,28 @@ const InscriptionForm = () => {
   return (
     <Layout title="Inscription aux créneaux">
       <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Layout en 3 colonnes */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Règles importantes en premier */}
+        <Card className="gradient-card shadow-soft border-border/50 border-l-4 border-l-info">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-foreground">
+              <span className="text-xl">📋</span>
+              Règles importantes
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="text-sm text-muted-foreground space-y-2">
+              <li>• Maximum 2 inscriptions par mois</li>
+              <li>• Pas deux fois le même créneau dans le mois</li>
+              <li>• Diffusion: 2-3 personnes dont au moins 1 homme</li>
+              <li>• Installation: 2 personnes maximum</li>
+              <li>• Validation requise par l'administrateur</li>
+              <li>• Seulement les dimanches</li>
+            </ul>
+          </CardContent>
+        </Card>
+
+        {/* Layout en 2 colonnes */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Type d'activité */}
           <Card className="gradient-card shadow-soft border-border/50">
             <CardHeader>
@@ -283,134 +303,90 @@ const InscriptionForm = () => {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div>
-                <Label htmlFor="date">Date (dimanche uniquement) *</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant={"outline"}
-                      className={cn(
-                        "w-full justify-start text-left font-normal",
-                        !selectedDate && "text-muted-foreground"
-                      )}
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {selectedDate ? format(selectedDate, "PPP", { locale: fr }) : <span>Choisir un dimanche</span>}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <Calendar
-                      mode="single"
-                      selected={selectedDate}
-                      onSelect={handleDateSelect}
-                      disabled={(date) => {
-                        const today = new Date();
-                        today.setHours(0, 0, 0, 0);
-                        return date < today || date.getDay() !== 0; // Seulement les dimanches
-                      }}
-                      initialFocus
-                      className={cn("p-3 pointer-events-auto")}
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
-              
-               {formData.date && formData.type_activite_id && (
-                <div>
-                  <Label htmlFor="creneau">Créneau horaire *</Label>
-                  <Select value={formData.creneau_id} onValueChange={(value) => handleInputChange('creneau_id', value)}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Sélectionner un créneau" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {creneaux.map((creneau) => (
-                        <SelectItem 
-                          key={creneau.id} 
-                          value={creneau.id}
-                          disabled={creneau.places_disponibles <= 0}
-                        >
-                          <div className="flex justify-between items-center w-full">
-                            <span>
-                              {creneau.heure_debut} - {creneau.heure_fin}
-                            </span>
-                            <span className="text-sm text-muted-foreground ml-4">
-                              {creneau.places_disponibles > 0 
-                                ? `${creneau.places_disponibles}/${creneau.max_participants} places`
-                                : 'Complet'
-                              }
-                            </span>
-                          </div>
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-              
-              {formData.creneau_id && (
-                <div>
-                  <Label htmlFor="notes">Notes (optionnel)</Label>
-                  <Input
-                    id="notes"
-                    value={formData.notes}
-                    onChange={(e) => handleInputChange('notes', e.target.value)}
-                    placeholder="Remarques particulières..."
-                  />
-                </div>
-              )}
-            </CardContent>
-          </Card>
+              {formData.type_activite_id ? (
+                <>
+                  <div>
+                    <Label htmlFor="date">Sélectionner une date (dimanche uniquement) *</Label>
+                    <div className="mt-2 border rounded-md">
+                      <Calendar
+                        mode="single"
+                        selected={selectedDate}
+                        onSelect={handleDateSelect}
+                        disabled={(date) => {
+                          const today = new Date();
+                          today.setHours(0, 0, 0, 0);
+                          return date < today || date.getDay() !== 0; // Seulement les dimanches dans le futur
+                        }}
+                        weekStartsOn={1} // Lundi
+                        className={cn("p-3 pointer-events-auto")}
+                      />
+                    </div>
+                  </div>
+                  
+                  {formData.date && (
+                    <div>
+                      <Label htmlFor="creneau">Créneau horaire *</Label>
+                      <Select value={formData.creneau_id} onValueChange={(value) => handleInputChange('creneau_id', value)}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Sélectionner un créneau" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {creneaux.map((creneau) => (
+                            <SelectItem 
+                              key={creneau.id} 
+                              value={creneau.id}
+                              disabled={creneau.places_disponibles <= 0}
+                            >
+                              <div className="flex justify-between items-center w-full">
+                                <span>
+                                  {creneau.heure_debut} - {creneau.heure_fin}
+                                </span>
+                                <span className="text-sm text-muted-foreground ml-4">
+                                  {creneau.places_disponibles > 0 
+                                    ? `${creneau.places_disponibles}/${creneau.max_participants} places`
+                                    : 'Complet'
+                                  }
+                                </span>
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
+                  
+                  {formData.creneau_id && (
+                    <div>
+                      <Label htmlFor="notes">Notes (optionnel)</Label>
+                      <Input
+                        id="notes"
+                        value={formData.notes}
+                        onChange={(e) => handleInputChange('notes', e.target.value)}
+                        placeholder="Remarques particulières..."
+                      />
+                    </div>
+                  )}
 
-          {/* Règles importantes */}
-          <Card className="gradient-card shadow-soft border-border/50 border-l-4 border-l-info">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-foreground">
-                <span className="text-xl">📋</span>
-                Règles importantes
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ul className="text-sm text-muted-foreground space-y-2">
-                <li>• Maximum 2 inscriptions par mois</li>
-                <li>• Pas deux fois le même créneau dans le mois</li>
-                <li>• Diffusion: 2-3 personnes dont au moins 1 homme</li>
-                <li>• Installation: 2 personnes maximum</li>
-                <li>• Validation requise par l'administrateur</li>
-                <li>• Seulement les dimanches</li>
-              </ul>
+                  {formData.creneau_id && (
+                    <div className="pt-4">
+                      <Button type="submit" className="w-full" disabled={loading}>
+                        {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        S'inscrire
+                      </Button>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <p className="text-muted-foreground text-center py-8">
+                  Veuillez d'abord sélectionner un type d'activité
+                </p>
+              )}
             </CardContent>
           </Card>
         </div>
 
-        {/* Utilisateur connecté */}
-        <Card className="gradient-card shadow-soft border-border/50 bg-secondary/20">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-3">
-              <span className="text-xl">👤</span>
-              <div>
-                <h3 className="font-semibold text-foreground">Utilisateur connecté</h3>
-                <p className="text-sm text-muted-foreground">
-                  {userProfile?.prenom} {userProfile?.nom}
-                  {user?.email && ` - ${user.email}`}
-                </p>
-                {proclamateurData && (
-                  <div className="text-xs text-muted-foreground mt-1">
-                    {proclamateurData.pionnier && "Pionnier"} 
-                    {proclamateurData.ancien && " • Ancien"}
-                    {proclamateurData.assistant_ministeriel && " • Assistant ministériel"}
-                  </div>
-                )}
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Boutons */}
-        <div className="flex gap-4">
-          <Button type="submit" className="flex-1" disabled={loading}>
-            {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            S'inscrire
-          </Button>
+        {/* Bouton retour */}
+        <div className="flex justify-end">
           <Button type="button" variant="outline" onClick={() => window.history.back()}>
             Retour
           </Button>
