@@ -262,76 +262,68 @@ const InscriptionForm = () => {
           </CardContent>
         </Card>
 
-        {/* Layout en 2 colonnes */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Type d'activité */}
-          <Card className="gradient-card shadow-soft border-border/50">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-foreground">
-                <span className="text-xl">⚙️</span>
-                Type d'activité
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div>
-                <Label htmlFor="type_activite">Type d'activité *</Label>
-                <Select value={formData.type_activite_id} onValueChange={(value) => handleInputChange('type_activite_id', value)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Sélectionner un type" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {typeActivites.map((type) => (
-                      <SelectItem key={type.id} value={type.id}>
-                        {type.nom}
-                        {type.description && (
-                          <span className="text-muted-foreground ml-2">- {type.description}</span>
-                        )}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </CardContent>
-          </Card>
+        {/* Interface unifiée pour inscription */}
+        <Card className="gradient-card shadow-soft border-border/50">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-foreground">
+              <span className="text-xl">📋</span>
+              S'inscrire à un créneau
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {/* Type d'activité */}
+            <div>
+              <Label htmlFor="type_activite">Type d'activité *</Label>
+              <Select value={formData.type_activite_id} onValueChange={(value) => handleInputChange('type_activite_id', value)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Sélectionner un type d'activité" />
+                </SelectTrigger>
+                <SelectContent>
+                  {typeActivites.map((type) => (
+                    <SelectItem key={type.id} value={type.id}>
+                      {type.nom}
+                      {type.description && (
+                        <span className="text-muted-foreground ml-2">- {type.description}</span>
+                      )}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
-          {/* Créneau souhaité */}
-          <Card className="gradient-card shadow-soft border-border/50">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-foreground">
-                <span className="text-xl">📅</span>
-                Créneau souhaité
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {formData.type_activite_id ? (
-                <>
-                  <div>
-                    <Label htmlFor="date">Sélectionner une date (dimanche uniquement) *</Label>
-                    <div className="mt-2 border rounded-md">
-                      <Calendar
-                        mode="single"
-                        selected={selectedDate}
-                        onSelect={handleDateSelect}
-                        disabled={(date) => {
-                          const today = new Date();
-                          today.setHours(0, 0, 0, 0);
-                          return date < today || date.getDay() !== 0; // Seulement les dimanches dans le futur
-                        }}
-                        weekStartsOn={1} // Lundi
-                        className={cn("p-3 pointer-events-auto")}
-                      />
-                    </div>
+            {formData.type_activite_id && (
+              <>
+                {/* Calendrier pour sélectionner la date */}
+                <div>
+                  <Label htmlFor="date">Sélectionner une date (dimanche uniquement) *</Label>
+                  <div className="mt-2 border rounded-md bg-background">
+                    <Calendar
+                      mode="single"
+                      selected={selectedDate}
+                      onSelect={handleDateSelect}
+                      disabled={(date) => {
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0);
+                        return date < today || date.getDay() !== 0; // Seulement les dimanches dans le futur
+                      }}
+                      weekStartsOn={1} // Lundi
+                      className="p-3"
+                      locale={fr}
+                    />
                   </div>
-                  
-                  {formData.date && (
-                    <div>
-                      <Label htmlFor="creneau">Créneau horaire *</Label>
-                      <Select value={formData.creneau_id} onValueChange={(value) => handleInputChange('creneau_id', value)}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Sélectionner un créneau" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {creneaux.map((creneau) => (
+                </div>
+                
+                {/* Créneaux disponibles pour la date sélectionnée */}
+                {formData.date && (
+                  <div>
+                    <Label htmlFor="creneau">Créneau horaire disponible *</Label>
+                    <Select value={formData.creneau_id} onValueChange={(value) => handleInputChange('creneau_id', value)}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Sélectionner un créneau" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {creneaux.length > 0 ? (
+                          creneaux.map((creneau) => (
                             <SelectItem 
                               key={creneau.id} 
                               value={creneau.id}
@@ -349,41 +341,49 @@ const InscriptionForm = () => {
                                 </span>
                               </div>
                             </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
-                  
-                  {formData.creneau_id && (
-                    <div>
-                      <Label htmlFor="notes">Notes (optionnel)</Label>
-                      <Input
-                        id="notes"
-                        value={formData.notes}
-                        onChange={(e) => handleInputChange('notes', e.target.value)}
-                        placeholder="Remarques particulières..."
-                      />
-                    </div>
-                  )}
+                          ))
+                        ) : (
+                          <SelectItem value="no-slots" disabled>
+                            Aucun créneau disponible
+                          </SelectItem>
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+                
+                {/* Notes optionnelles */}
+                {formData.creneau_id && (
+                  <div>
+                    <Label htmlFor="notes">Notes (optionnel)</Label>
+                    <Input
+                      id="notes"
+                      value={formData.notes}
+                      onChange={(e) => handleInputChange('notes', e.target.value)}
+                      placeholder="Remarques particulières..."
+                    />
+                  </div>
+                )}
 
-                  {formData.creneau_id && (
-                    <div className="pt-4">
-                      <Button type="submit" className="w-full" disabled={loading}>
-                        {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        S'inscrire
-                      </Button>
-                    </div>
-                  )}
-                </>
-              ) : (
-                <p className="text-muted-foreground text-center py-8">
-                  Veuillez d'abord sélectionner un type d'activité
-                </p>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+                {/* Bouton d'inscription */}
+                {formData.creneau_id && (
+                  <div className="flex justify-end">
+                    <Button type="submit" disabled={loading}>
+                      {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      S'inscrire
+                    </Button>
+                  </div>
+                )}
+              </>
+            )}
+
+            {!formData.type_activite_id && (
+              <p className="text-muted-foreground text-center py-8">
+                Veuillez sélectionner un type d'activité pour voir les créneaux disponibles
+              </p>
+            )}
+          </CardContent>
+        </Card>
 
         {/* Bouton retour */}
         <div className="flex justify-end">
