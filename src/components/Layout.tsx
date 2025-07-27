@@ -2,6 +2,9 @@ import { ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { useAuth } from '@/contexts/AuthContext';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { LogOut } from 'lucide-react';
 
 interface LayoutProps {
   children: ReactNode;
@@ -10,6 +13,7 @@ interface LayoutProps {
 
 const Layout = ({ children, title }: LayoutProps) => {
   const location = useLocation();
+  const { user, signOut } = useAuth();
 
   const navigationItems = [
     { path: '/', label: 'Accueil', icon: '🏠' },
@@ -34,6 +38,30 @@ const Layout = ({ children, title }: LayoutProps) => {
                 <p className="text-sm text-muted-foreground">Gestion marché local</p>
               </div>
             </div>
+            
+            {user && (
+              <div className="flex items-center space-x-3">
+                <div className="text-right">
+                  <p className="text-sm font-medium text-foreground">
+                    {user.user_metadata?.prenom} {user.user_metadata?.nom}
+                  </p>
+                  <p className="text-xs text-muted-foreground">{user.email}</p>
+                </div>
+                <Avatar className="h-8 w-8">
+                  <AvatarFallback className="bg-primary text-primary-foreground">
+                    {user.user_metadata?.prenom?.[0]}{user.user_metadata?.nom?.[0]}
+                  </AvatarFallback>
+                </Avatar>
+                <Button 
+                  variant="ghost" 
+                  size="sm" 
+                  onClick={signOut}
+                  className="h-8 w-8 p-0"
+                >
+                  <LogOut className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
           </div>
         </div>
       </header>
