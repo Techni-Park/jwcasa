@@ -14,7 +14,292 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      creneaux: {
+        Row: {
+          actif: boolean | null
+          created_at: string
+          date_creneau: string
+          heure_debut: string
+          heure_fin: string
+          id: string
+          max_participants: number | null
+          notes: string | null
+          responsable_id: string | null
+          type_activite_id: string
+          updated_at: string
+        }
+        Insert: {
+          actif?: boolean | null
+          created_at?: string
+          date_creneau: string
+          heure_debut: string
+          heure_fin: string
+          id?: string
+          max_participants?: number | null
+          notes?: string | null
+          responsable_id?: string | null
+          type_activite_id: string
+          updated_at?: string
+        }
+        Update: {
+          actif?: boolean | null
+          created_at?: string
+          date_creneau?: string
+          heure_debut?: string
+          heure_fin?: string
+          id?: string
+          max_participants?: number | null
+          notes?: string | null
+          responsable_id?: string | null
+          type_activite_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "creneaux_responsable_id_fkey"
+            columns: ["responsable_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "creneaux_type_activite_id_fkey"
+            columns: ["type_activite_id"]
+            isOneToOne: false
+            referencedRelation: "type_activite"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inscriptions: {
+        Row: {
+          confirme: boolean | null
+          created_at: string
+          creneau_id: string
+          date_inscription: string
+          id: string
+          notes: string | null
+          proclamateur_id: string
+        }
+        Insert: {
+          confirme?: boolean | null
+          created_at?: string
+          creneau_id: string
+          date_inscription?: string
+          id?: string
+          notes?: string | null
+          proclamateur_id: string
+        }
+        Update: {
+          confirme?: boolean | null
+          created_at?: string
+          creneau_id?: string
+          date_inscription?: string
+          id?: string
+          notes?: string | null
+          proclamateur_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inscriptions_creneau_id_fkey"
+            columns: ["creneau_id"]
+            isOneToOne: false
+            referencedRelation: "creneaux"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "inscriptions_proclamateur_id_fkey"
+            columns: ["proclamateur_id"]
+            isOneToOne: false
+            referencedRelation: "proclamateurs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      parametrages: {
+        Row: {
+          cle: string
+          description: string | null
+          id: string
+          updated_at: string
+          valeur: string
+        }
+        Insert: {
+          cle: string
+          description?: string | null
+          id?: string
+          updated_at?: string
+          valeur: string
+        }
+        Update: {
+          cle?: string
+          description?: string | null
+          id?: string
+          updated_at?: string
+          valeur?: string
+        }
+        Relationships: []
+      }
+      proclamateurs: {
+        Row: {
+          ancien: boolean | null
+          assistant_ministeriel: boolean | null
+          baptise: boolean | null
+          created_at: string
+          id: string
+          notes: string | null
+          pionnier: boolean | null
+          profile_id: string
+          updated_at: string
+        }
+        Insert: {
+          ancien?: boolean | null
+          assistant_ministeriel?: boolean | null
+          baptise?: boolean | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          pionnier?: boolean | null
+          profile_id: string
+          updated_at?: string
+        }
+        Update: {
+          ancien?: boolean | null
+          assistant_ministeriel?: boolean | null
+          baptise?: boolean | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          pionnier?: boolean | null
+          profile_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proclamateurs_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          id: string
+          nom: string
+          prenom: string
+          role: Database["public"]["Enums"]["role_type"]
+          status: Database["public"]["Enums"]["status_type"]
+          telephone: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          nom: string
+          prenom: string
+          role?: Database["public"]["Enums"]["role_type"]
+          status?: Database["public"]["Enums"]["status_type"]
+          telephone?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          nom?: string
+          prenom?: string
+          role?: Database["public"]["Enums"]["role_type"]
+          status?: Database["public"]["Enums"]["status_type"]
+          telephone?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      rapports: {
+        Row: {
+          annee: number
+          created_at: string
+          etudes_bibliques: number | null
+          heures_predication: number | null
+          id: string
+          mois: number
+          notes: string | null
+          placements: number | null
+          proclamateur_id: string
+          soumis_le: string | null
+          updated_at: string
+          videos: number | null
+        }
+        Insert: {
+          annee: number
+          created_at?: string
+          etudes_bibliques?: number | null
+          heures_predication?: number | null
+          id?: string
+          mois: number
+          notes?: string | null
+          placements?: number | null
+          proclamateur_id: string
+          soumis_le?: string | null
+          updated_at?: string
+          videos?: number | null
+        }
+        Update: {
+          annee?: number
+          created_at?: string
+          etudes_bibliques?: number | null
+          heures_predication?: number | null
+          id?: string
+          mois?: number
+          notes?: string | null
+          placements?: number | null
+          proclamateur_id?: string
+          soumis_le?: string | null
+          updated_at?: string
+          videos?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rapports_proclamateur_id_fkey"
+            columns: ["proclamateur_id"]
+            isOneToOne: false
+            referencedRelation: "proclamateurs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      type_activite: {
+        Row: {
+          actif: boolean | null
+          created_at: string
+          description: string | null
+          duree_minutes: number | null
+          id: string
+          nom: string
+        }
+        Insert: {
+          actif?: boolean | null
+          created_at?: string
+          description?: string | null
+          duree_minutes?: number | null
+          id?: string
+          nom: string
+        }
+        Update: {
+          actif?: boolean | null
+          created_at?: string
+          description?: string | null
+          duree_minutes?: number | null
+          id?: string
+          nom?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -23,7 +308,13 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      activite_type:
+        | "predication"
+        | "etude_biblique"
+        | "visite_retour"
+        | "autre"
+      role_type: "admin" | "responsable" | "proclamateur"
+      status_type: "actif" | "inactif" | "temporaire"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +441,15 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      activite_type: [
+        "predication",
+        "etude_biblique",
+        "visite_retour",
+        "autre",
+      ],
+      role_type: ["admin", "responsable", "proclamateur"],
+      status_type: ["actif", "inactif", "temporaire"],
+    },
   },
 } as const
