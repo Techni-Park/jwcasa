@@ -5,16 +5,17 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Badge } from '@/components/ui/badge';
 import { Calendar } from '@/components/ui/calendar';
-import { CalendarIcon, Loader2 } from 'lucide-react';
+import { ChevronDown, ChevronRight, Crown, Loader2, User, Plus } from 'lucide-react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 
 const InscriptionForm = () => {
   const { toast } = useToast();
@@ -31,6 +32,11 @@ const InscriptionForm = () => {
     type_activite_id: '',
     notes: ''
   });
+  const [expandedCreneaux, setExpandedCreneaux] = useState<Set<string>>(new Set());
+  const [inscriptions, setInscriptions] = useState<any[]>([]);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [selectedCreneauForInscription, setSelectedCreneauForInscription] = useState<any>(null);
+  const [violatedRules, setViolatedRules] = useState<string[]>([]);
 
   useEffect(() => {
     if (user) {
@@ -54,9 +60,19 @@ const InscriptionForm = () => {
         .from('profiles')
         .select('*')
         .eq('user_id', user?.id)
-        .single();
+        .maybeSingle();
 
       if (profileError) throw profileError;
+      
+      if (!profile) {
+        toast({
+          title: "Erreur",
+          description: "Profil utilisateur non trouvé",
+          variant: "destructive"
+        });
+        return;
+      }
+      
       setUserProfile(profile);
 
       // Récupérer les données proclamateur
@@ -64,9 +80,19 @@ const InscriptionForm = () => {
         .from('proclamateurs')
         .select('*')
         .eq('profile_id', profile.id)
-        .single();
+        .maybeSingle();
 
       if (proclamateurError) throw proclamateurError;
+      
+      if (!proclamateur) {
+        toast({
+          title: "Erreur",
+          description: "Données proclamateur non trouvées. Contactez l'administrateur.",
+          variant: "destructive"
+        });
+        return;
+      }
+      
       setProclamateurData(proclamateur);
       
     } catch (error) {
@@ -107,7 +133,15 @@ const InscriptionForm = () => {
         .from('creneaux')
         .select(`
           *,
-          inscriptions(id, proclamateur_id)
+          inscriptions(
+            id, 
+            proclamateur_id, 
+            confirme,
+            proclamateurs(
+              profile_id,
+              profiles(nom, prenom)
+            )
+          )
         `)
         .eq('date_creneau', formData.date)
         .eq('type_activite_id', formData.type_activite_id)
@@ -124,8 +158,104 @@ const InscriptionForm = () => {
       })) || [];
 
       setCreneaux(creneauxAvecPlaces);
+      setInscriptions(data?.flatMap(c => c.inscriptions || []) || []);
     } catch (error) {
       console.error('Erreur lors du chargement des créneaux:', error);
+    }
+  };
+
+  const checkInscriptionRules = async (creneauId: string) => {
+    if (!proclamateurData) return [];
+    
+    const violations: string[] = [];
+    const currentMonth = new Date(formData.date).getMonth() + 1;
+    const currentYear = new Date(formData.date).getFullYear();
+
+    try {
+      // Vérifier le nombre d'inscriptions du mois
+      const { data: inscriptionsMonth } = await supabase
+        .from('inscriptions')
+        .select('id, creneau_id, creneaux(type_activite_id)')
+        .eq('proclamateur_id', proclamateurData.id)
+        .gte('date_inscription', `${currentYear}-${currentMonth.toString().padStart(2, '0')}-01`)
+        .lt('date_inscription', `${currentYear}-${(currentMonth + 1).toString().padStart(2, '0')}-01`);
+
+      if (inscriptionsMonth && inscriptionsMonth.length >= 2) {
+        violations.push("Maximum 2 inscriptions par mois déjà atteint");
+      }
+
+      // Vérifier si déjà inscrit au même créneau dans le mois
+      const sameSlotThisMonth = inscriptionsMonth?.some(inscription => 
+        inscription.creneau_id === creneauId
+      );
+      
+      if (sameSlotThisMonth) {
+        violations.push("Déjà inscrit à ce créneau ce mois-ci");
+      }
+
+    } catch (error) {
+      console.error('Erreur lors de la vérification des règles:', error);
+    }
+
+    return violations;
+  };
+
+  const toggleCreneauExpansion = (creneauId: string) => {
+    const newExpanded = new Set(expandedCreneaux);
+    if (newExpanded.has(creneauId)) {
+      newExpanded.delete(creneauId);
+    } else {
+      newExpanded.add(creneauId);
+    }
+    setExpandedCreneaux(newExpanded);
+  };
+
+  const handleSlotClick = async (creneau: any) => {
+    if (creneau.places_disponibles <= 0) return;
+    
+    const violations = await checkInscriptionRules(creneau.id);
+    setViolatedRules(violations);
+    setSelectedCreneauForInscription(creneau);
+    setShowConfirmDialog(true);
+  };
+
+  const confirmInscription = async () => {
+    if (!selectedCreneauForInscription || !proclamateurData) return;
+
+    try {
+      setLoading(true);
+      
+      const { error } = await supabase
+        .from('inscriptions')
+        .insert({
+          proclamateur_id: proclamateurData.id,
+          creneau_id: selectedCreneauForInscription.id,
+          notes: formData.notes,
+          confirme: false
+        });
+
+      if (error) throw error;
+
+      toast({
+        title: "Succès",
+        description: "Inscription enregistrée. En attente de validation.",
+      });
+
+      // Recharger les créneaux
+      await loadCreneauxForDate();
+      
+    } catch (error) {
+      console.error('Erreur lors de l\'inscription:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible d'enregistrer l'inscription",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+      setShowConfirmDialog(false);
+      setSelectedCreneauForInscription(null);
+      setViolatedRules([]);
     }
   };
 
@@ -246,152 +376,238 @@ const InscriptionForm = () => {
 
   return (
     <Layout title="Inscription aux créneaux">
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Règles importantes et formulaire d'inscription alignés horizontalement */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Règles importantes */}
-          <Card className="gradient-card shadow-soft border-border/50 border-l-4 border-l-info">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-foreground">
-                <span className="text-xl">📋</span>
-                Règles importantes
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ul className="text-sm text-muted-foreground space-y-2">
-                <li>• Maximum 2 inscriptions par mois</li>
-                <li>• Pas deux fois le même créneau dans le mois</li>
-                <li>• Diffusion: 2-3 personnes dont au moins 1 homme</li>
-                <li>• Installation: 2 personnes maximum</li>
-                <li>• Validation requise par l'administrateur</li>
-                <li>• Seulement les dimanches</li>
-              </ul>
+      <div className="space-y-6">
+        {/* Règles importantes */}
+        <Card className="gradient-card shadow-soft border-border/50 border-l-4 border-l-info">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-foreground">
+              <span className="text-xl">📋</span>
+              Règles importantes
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="text-sm text-muted-foreground space-y-2">
+              <li>• Maximum 2 inscriptions par mois</li>
+              <li>• Pas deux fois le même créneau dans le mois</li>
+              <li>• Diffusion: 2-3 personnes dont au moins 1 homme</li>
+              <li>• Installation: 2 personnes maximum</li>
+              <li>• Validation requise par l'administrateur</li>
+              <li>• Seulement les dimanches</li>
+            </ul>
+          </CardContent>
+        </Card>
+
+        {/* Type d'activité */}
+        <Card className="gradient-card shadow-soft border-border/50">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-foreground">
+              <span className="text-xl">🎯</span>
+              Type d'activité
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Label htmlFor="type_activite">Sélectionner un type d'activité *</Label>
+            <Select value={formData.type_activite_id} onValueChange={(value) => handleInputChange('type_activite_id', value)}>
+              <SelectTrigger className="mt-2">
+                <SelectValue placeholder="Choisir un type d'activité" />
+              </SelectTrigger>
+              <SelectContent>
+                {typeActivites.map((type) => (
+                  <SelectItem key={type.id} value={type.id}>
+                    {type.nom}
+                    {type.description && (
+                      <span className="text-muted-foreground ml-2">- {type.description}</span>
+                    )}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </CardContent>
+        </Card>
+
+        {/* Calendrier et créneaux côte à côte */}
+        {formData.type_activite_id && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Calendrier */}
+            <Card className="gradient-card shadow-soft border-border/50">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-foreground">
+                  <span className="text-xl">📅</span>
+                  Sélectionner une date
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="border rounded-md bg-background">
+                  <Calendar
+                    mode="single"
+                    selected={selectedDate}
+                    onSelect={handleDateSelect}
+                    disabled={(date) => {
+                      const today = new Date();
+                      today.setHours(0, 0, 0, 0);
+                      return date < today || date.getDay() !== 0; // Seulement les dimanches dans le futur
+                    }}
+                    weekStartsOn={1} // Lundi
+                    className="p-3"
+                    locale={fr}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Créneaux disponibles */}
+            <Card className="gradient-card shadow-soft border-border/50">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-foreground">
+                  <span className="text-xl">⏰</span>
+                  Créneaux disponibles
+                  {selectedDate && (
+                    <span className="text-sm font-normal text-muted-foreground">
+                      - {format(selectedDate, 'EEEE d MMMM yyyy', { locale: fr })}
+                    </span>
+                  )}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {formData.date ? (
+                  <div className="space-y-3">
+                    {creneaux.length > 0 ? (
+                      creneaux.map((creneau) => (
+                        <Collapsible
+                          key={creneau.id}
+                          open={expandedCreneaux.has(creneau.id)}
+                          onOpenChange={() => toggleCreneauExpansion(creneau.id)}
+                        >
+                          <div className="border rounded-lg p-4 space-y-3">
+                            {/* En-tête du créneau */}
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-3">
+                                <CollapsibleTrigger asChild>
+                                  <Button variant="ghost" size="sm" className="p-0">
+                                    {expandedCreneaux.has(creneau.id) ? (
+                                      <ChevronDown className="h-4 w-4" />
+                                    ) : (
+                                      <ChevronRight className="h-4 w-4" />
+                                    )}
+                                  </Button>
+                                </CollapsibleTrigger>
+                                <div>
+                                  <div className="font-medium">
+                                    {creneau.heure_debut} - {creneau.heure_fin}
+                                  </div>
+                                  <div className="text-sm text-muted-foreground">
+                                    {creneau.inscriptions_count}/{creneau.max_participants} inscrits
+                                  </div>
+                                </div>
+                              </div>
+                              <Badge variant={creneau.places_disponibles > 0 ? "default" : "secondary"}>
+                                {creneau.places_disponibles > 0 
+                                  ? `${creneau.places_disponibles} places`
+                                  : 'Complet'
+                                }
+                              </Badge>
+                            </div>
+
+                            {/* Places occupées et libres */}
+                            <div className="grid grid-cols-2 gap-2">
+                              {/* Places occupées */}
+                              {creneau.inscriptions?.map((inscription: any, index: number) => (
+                                <div
+                                  key={inscription.id}
+                                  className={cn(
+                                    "flex items-center gap-2 p-2 rounded border",
+                                    inscription.confirme 
+                                      ? "bg-green-50 border-green-200" 
+                                      : "bg-yellow-50 border-yellow-200"
+                                  )}
+                                >
+                                  <User className="h-4 w-4" />
+                                  <span className="text-sm truncate">
+                                    {inscription.proclamateurs?.profiles?.prenom} {inscription.proclamateurs?.profiles?.nom}
+                                  </span>
+                                  {inscription.confirme && (
+                                    <Badge variant="outline" className="text-xs">Validé</Badge>
+                                  )}
+                                </div>
+                              ))}
+
+                              {/* Places libres */}
+                              {Array.from({ length: creneau.places_disponibles }).map((_, index) => (
+                                <button
+                                  key={`libre-${index}`}
+                                  onClick={() => handleSlotClick(creneau)}
+                                  className="flex items-center justify-center gap-2 p-2 rounded border border-dashed border-muted-foreground/30 hover:border-primary hover:bg-primary/5 transition-colors"
+                                  disabled={loading}
+                                >
+                                  <Plus className="h-4 w-4 text-muted-foreground" />
+                                  <span className="text-sm text-muted-foreground">
+                                    Place libre
+                                  </span>
+                                </button>
+                              ))}
+                            </div>
+
+                            {/* Détails étendus */}
+                            <CollapsibleContent className="space-y-2">
+                              {creneau.notes && (
+                                <div className="text-sm text-muted-foreground bg-muted p-2 rounded">
+                                  <strong>Notes:</strong> {creneau.notes}
+                                </div>
+                              )}
+                              {creneau.responsable_id && (
+                                <div className="flex items-center gap-2 text-sm">
+                                  <Crown className="h-4 w-4 text-yellow-500" />
+                                  <span>Responsable assigné</span>
+                                </div>
+                              )}
+                            </CollapsibleContent>
+                          </div>
+                        </Collapsible>
+                      ))
+                    ) : (
+                      <div className="text-center py-8 text-muted-foreground">
+                        <p>Aucun créneau disponible pour cette date</p>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <p>Sélectionnez une date pour voir les créneaux disponibles</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {!formData.type_activite_id && (
+          <Card className="gradient-card shadow-soft border-border/50">
+            <CardContent className="py-8">
+              <p className="text-muted-foreground text-center">
+                Veuillez sélectionner un type d'activité pour commencer
+              </p>
             </CardContent>
           </Card>
+        )}
 
-          {/* Interface unifiée pour inscription */}
+        {/* Notes optionnelles */}
+        {formData.date && (
           <Card className="gradient-card shadow-soft border-border/50">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-foreground">
-                <span className="text-xl">📋</span>
-                S'inscrire à un créneau
+                <span className="text-xl">📝</span>
+                Notes (optionnel)
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-6">
-              {/* Type d'activité */}
-              <div>
-                <Label htmlFor="type_activite">Type d'activité *</Label>
-                <Select value={formData.type_activite_id} onValueChange={(value) => handleInputChange('type_activite_id', value)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Sélectionner un type d'activité" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {typeActivites.map((type) => (
-                      <SelectItem key={type.id} value={type.id}>
-                        {type.nom}
-                        {type.description && (
-                          <span className="text-muted-foreground ml-2">- {type.description}</span>
-                        )}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {formData.type_activite_id && (
-                <>
-                  {/* Calendrier pour sélectionner la date */}
-                  <div>
-                    <Label htmlFor="date">Sélectionner une date (dimanche uniquement) *</Label>
-                    <div className="mt-2 border rounded-md bg-background">
-                      <Calendar
-                        mode="single"
-                        selected={selectedDate}
-                        onSelect={handleDateSelect}
-                        disabled={(date) => {
-                          const today = new Date();
-                          today.setHours(0, 0, 0, 0);
-                          return date < today || date.getDay() !== 0; // Seulement les dimanches dans le futur
-                        }}
-                        weekStartsOn={1} // Lundi
-                        className="p-3"
-                        locale={fr}
-                      />
-                    </div>
-                  </div>
-                  
-                  {/* Créneaux disponibles pour la date sélectionnée */}
-                  {formData.date && (
-                    <div>
-                      <Label htmlFor="creneau">Créneau horaire disponible *</Label>
-                      <Select value={formData.creneau_id} onValueChange={(value) => handleInputChange('creneau_id', value)}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Sélectionner un créneau" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {creneaux.length > 0 ? (
-                            creneaux.map((creneau) => (
-                              <SelectItem 
-                                key={creneau.id} 
-                                value={creneau.id}
-                                disabled={creneau.places_disponibles <= 0}
-                              >
-                                <div className="flex justify-between items-center w-full">
-                                  <span>
-                                    {creneau.heure_debut} - {creneau.heure_fin}
-                                  </span>
-                                  <span className="text-sm text-muted-foreground ml-4">
-                                    {creneau.places_disponibles > 0 
-                                      ? `${creneau.places_disponibles}/${creneau.max_participants} places`
-                                      : 'Complet'
-                                    }
-                                  </span>
-                                </div>
-                              </SelectItem>
-                            ))
-                          ) : (
-                            <SelectItem value="no-slots" disabled>
-                              Aucun créneau disponible
-                            </SelectItem>
-                          )}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  )}
-                  
-                  {/* Notes optionnelles */}
-                  {formData.creneau_id && (
-                    <div>
-                      <Label htmlFor="notes">Notes (optionnel)</Label>
-                      <Input
-                        id="notes"
-                        value={formData.notes}
-                        onChange={(e) => handleInputChange('notes', e.target.value)}
-                        placeholder="Remarques particulières..."
-                      />
-                    </div>
-                  )}
-
-                  {/* Bouton d'inscription */}
-                  {formData.creneau_id && (
-                    <div className="flex justify-end">
-                      <Button type="submit" disabled={loading}>
-                        {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                        S'inscrire
-                      </Button>
-                    </div>
-                  )}
-                </>
-              )}
-
-              {!formData.type_activite_id && (
-                <p className="text-muted-foreground text-center py-8">
-                  Veuillez sélectionner un type d'activité pour voir les créneaux disponibles
-                </p>
-              )}
+            <CardContent>
+              <Input
+                value={formData.notes}
+                onChange={(e) => handleInputChange('notes', e.target.value)}
+                placeholder="Remarques particulières pour vos inscriptions..."
+              />
             </CardContent>
           </Card>
-        </div>
+        )}
 
         {/* Bouton retour */}
         <div className="flex justify-end">
@@ -399,7 +615,54 @@ const InscriptionForm = () => {
             Retour
           </Button>
         </div>
-      </form>
+
+        {/* Dialog de confirmation d'inscription */}
+        <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Confirmer l'inscription</AlertDialogTitle>
+              <AlertDialogDescription asChild>
+                <div className="space-y-3">
+                  <p>
+                    Voulez-vous vous inscrire au créneau du{' '}
+                    <strong>
+                      {selectedDate && format(selectedDate, 'EEEE d MMMM yyyy', { locale: fr })}
+                    </strong>{' '}
+                    de{' '}
+                    <strong>
+                      {selectedCreneauForInscription?.heure_debut} - {selectedCreneauForInscription?.heure_fin}
+                    </strong>
+                    ?
+                  </p>
+                  
+                  {violatedRules.length > 0 && (
+                    <div className="p-3 bg-destructive/10 border border-destructive/20 rounded">
+                      <p className="font-medium text-destructive mb-2">
+                        ⚠️ Règles non respectées :
+                      </p>
+                      <ul className="list-disc list-inside space-y-1 text-sm text-destructive">
+                        {violatedRules.map((rule, index) => (
+                          <li key={index}>{rule}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Annuler</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={confirmInscription}
+                disabled={violatedRules.length > 0 || loading}
+              >
+                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Confirmer l'inscription
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </div>
     </Layout>
   );
 };
