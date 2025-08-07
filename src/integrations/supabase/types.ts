@@ -144,8 +144,8 @@ export type Database = {
         Row: {
           ancien: boolean | null
           assistant_ministeriel: boolean | null
-          baptise: boolean | null
           created_at: string
+          frère: boolean | null
           id: string
           notes: string | null
           pionnier: boolean | null
@@ -155,8 +155,8 @@ export type Database = {
         Insert: {
           ancien?: boolean | null
           assistant_ministeriel?: boolean | null
-          baptise?: boolean | null
           created_at?: string
+          frère?: boolean | null
           id?: string
           notes?: string | null
           pionnier?: boolean | null
@@ -166,8 +166,8 @@ export type Database = {
         Update: {
           ancien?: boolean | null
           assistant_ministeriel?: boolean | null
-          baptise?: boolean | null
           created_at?: string
+          frère?: boolean | null
           id?: string
           notes?: string | null
           pionnier?: boolean | null
@@ -305,7 +305,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      get_current_user_role: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
     }
     Enums: {
       activite_type:
