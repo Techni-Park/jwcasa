@@ -28,7 +28,7 @@ const RapportForm = () => {
   const { toast } = useToast();
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
-  const [creneauxInscrits, setCreneauxInscrits] = useState<CreneauxInscrit[]>([]);
+  const [creneauxInscrits, setCreneauxInscrits] = useState<CreneauInscrit[]>([]);
   const [userProfile, setUserProfile] = useState<any>(null);
   const [formData, setFormData] = useState({
     creneau_id: '',
@@ -168,11 +168,14 @@ const RapportForm = () => {
       }
 
       // Sauvegarder le rapport
+      const currentDate = new Date();
       const { error } = await supabase
         .from('rapports')
         .insert({
           proclamateur_id: proclamateurs.id,
           creneau_id: formData.creneau_id,
+          mois: currentDate.getMonth() + 1,
+          annee: currentDate.getFullYear(),
           heures_predication: parseInt(formData.conversations) || 0,
           placements: (parseInt(formData.revues) || 0) + 
                      (parseInt(formData.brochures) || 0) + 
@@ -244,7 +247,7 @@ const RapportForm = () => {
                 </SelectTrigger>
                 <SelectContent>
                   {creneauxInscrits.length === 0 ? (
-                    <SelectItem value="" disabled>
+                    <SelectItem value="no-slots" disabled>
                       Aucun créneau confirmé trouvé
                     </SelectItem>
                   ) : (

@@ -224,6 +224,7 @@ export type Database = {
         Row: {
           annee: number
           created_at: string
+          creneau_id: string | null
           etudes_bibliques: number | null
           heures_predication: number | null
           id: string
@@ -238,6 +239,7 @@ export type Database = {
         Insert: {
           annee: number
           created_at?: string
+          creneau_id?: string | null
           etudes_bibliques?: number | null
           heures_predication?: number | null
           id?: string
@@ -252,6 +254,7 @@ export type Database = {
         Update: {
           annee?: number
           created_at?: string
+          creneau_id?: string | null
           etudes_bibliques?: number | null
           heures_predication?: number | null
           id?: string
@@ -264,6 +267,20 @@ export type Database = {
           videos?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "fk_rapports_creneau"
+            columns: ["creneau_id"]
+            isOneToOne: false
+            referencedRelation: "creneaux"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rapports_creneau_id_fkey"
+            columns: ["creneau_id"]
+            isOneToOne: false
+            referencedRelation: "creneaux"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "rapports_proclamateur_id_fkey"
             columns: ["proclamateur_id"]
