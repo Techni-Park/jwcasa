@@ -129,6 +129,11 @@ const InscriptionForm = () => {
 
   const loadCreneauxForDate = async () => {
     try {
+      console.log('🔍 Chargement des créneaux pour:', {
+        date: formData.date,
+        type_activite_id: formData.type_activite_id
+      });
+
       const { data, error } = await supabase
         .from('creneaux')
         .select(`
@@ -148,6 +153,8 @@ const InscriptionForm = () => {
         .eq('actif', true)
         .order('heure_debut');
 
+      console.log('📊 Résultat de la requête créneaux:', { data, error });
+
       if (error) throw error;
       
       // Calculer les places disponibles
@@ -157,10 +164,12 @@ const InscriptionForm = () => {
         places_disponibles: creneau.max_participants - (creneau.inscriptions?.length || 0)
       })) || [];
 
+      console.log('✅ Créneaux avec places calculées:', creneauxAvecPlaces);
+
       setCreneaux(creneauxAvecPlaces);
       setInscriptions(data?.flatMap(c => c.inscriptions || []) || []);
     } catch (error) {
-      console.error('Erreur lors du chargement des créneaux:', error);
+      console.error('❌ Erreur lors du chargement des créneaux:', error);
     }
   };
 
