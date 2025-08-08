@@ -17,6 +17,85 @@ import { supabase } from '@/integrations/supabase/client';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 
+const MesInscriptions = ({ proclamateurId }: { proclamateurId: string }) => {
+  const [inscriptionsEnAttente, setInscriptionsEnAttente] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadInscriptionsEnAttente();
+  }, [proclamateurId]);
+
+  const loadInscriptionsEnAttente = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('inscriptions')
+        .select(`
+          *,
+          creneaux(
+            date_creneau,
+            heure_debut,
+            heure_fin,
+            type_activite(nom)
+          )
+        `)
+        .eq('proclamateur_id', proclamateurId)
+        .eq('confirme', false)
+        .order('date_inscription', { ascending: false });
+
+      if (error) throw error;
+      setInscriptionsEnAttente(data || []);
+    } catch (error) {
+      console.error('Erreur lors du chargement des inscriptions en attente:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return <div className="flex items-center justify-center py-4"><Loader2 className="h-6 w-6 animate-spin" /></div>;
+  }
+
+  if (inscriptionsEnAttente.length === 0) {
+    return (
+      <div className="text-center py-4 text-muted-foreground">
+        <p>Aucune inscription en attente</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {inscriptionsEnAttente.map((inscription) => (
+        <div
+          key={inscription.id}
+          className="p-3 border rounded-lg bg-yellow-50 border-yellow-200"
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="font-medium text-foreground">
+                {inscription.creneaux?.type_activite?.nom}
+              </div>
+              <div className="text-sm text-muted-foreground">
+                {format(new Date(inscription.creneaux?.date_creneau), 'EEEE d MMMM yyyy', { locale: fr })}
+                {' • '}
+                {inscription.creneaux?.heure_debut} - {inscription.creneaux?.heure_fin}
+              </div>
+              {inscription.notes && (
+                <div className="text-sm text-muted-foreground mt-1">
+                  Notes: {inscription.notes}
+                </div>
+              )}
+            </div>
+            <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-300">
+              En attente
+            </Badge>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};
+
 const InscriptionForm = () => {
   const { toast } = useToast();
   const { user } = useAuth();
@@ -614,6 +693,21 @@ const InscriptionForm = () => {
               <p className="text-muted-foreground text-center">
                 Veuillez sélectionner un type d'activité pour commencer
               </p>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Mes inscriptions en attente */}
+        {proclamateurData && (
+          <Card className="gradient-card shadow-soft border-border/50 border-l-4 border-l-warning">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-foreground">
+                <span className="text-xl">⏳</span>
+                Mes inscriptions en attente
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <MesInscriptions proclamateurId={proclamateurData.id} />
             </CardContent>
           </Card>
         )}
