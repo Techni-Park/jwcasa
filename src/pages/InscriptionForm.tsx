@@ -76,7 +76,7 @@ const InscriptionForm = () => {
       setUserProfile(profile);
 
       // Récupérer les données proclamateur
-      const { data: proclamateur, error: proclamateurError } = await supabase
+      let { data: proclamateur, error: proclamateurError } = await supabase
         .from('proclamateurs')
         .select('*')
         .eq('profile_id', profile.id)
@@ -84,13 +84,32 @@ const InscriptionForm = () => {
 
       if (proclamateurError) throw proclamateurError;
       
+      // Si pas de données proclamateur, les créer automatiquement
       if (!proclamateur) {
-        toast({
-          title: "Erreur",
-          description: "Données proclamateur non trouvées. Contactez l'administrateur.",
-          variant: "destructive"
-        });
-        return;
+        const { data: newProclamateur, error: createError } = await supabase
+          .from('proclamateurs')
+          .insert({
+            profile_id: profile.id,
+            frère: false,
+            ancien: false,
+            assistant_ministeriel: false,
+            pionnier: false,
+            notes: ''
+          })
+          .select()
+          .single();
+
+        if (createError) {
+          console.error('Erreur lors de la création des données proclamateur:', createError);
+          toast({
+            title: "Erreur",
+            description: "Impossible de créer vos données proclamateur. Contactez l'administrateur.",
+            variant: "destructive"
+          });
+          return;
+        }
+
+        proclamateur = newProclamateur;
       }
       
       setProclamateurData(proclamateur);
