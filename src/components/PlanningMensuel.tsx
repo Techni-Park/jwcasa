@@ -102,64 +102,77 @@ const PlanningMensuel = ({ selectedMonth, onMonthChange }: PlanningMensuelProps)
   const monthEnd = endOfMonth(monthStart);
   const calendarDays = eachDayOfInterval({ start: monthStart, end: monthEnd });
 
-  const getCreneauxForDay = (date: Date) => {
-    const dateString = format(date, 'yyyy-MM-dd');
-    const dayCreneaux = creneaux.filter(creneau => 
-      format(new Date(creneau.date_creneau), 'yyyy-MM-dd') === dateString
-    );
-    
-    return dayCreneaux.map(creneau => {
+  const getDaysWithCreneaux = () => {
+    // Grouper les créneaux par date
+    const creneauxByDate = creneaux.reduce((acc, creneau) => {
+      const dateString = creneau.date_creneau;
+      if (!acc[dateString]) {
+        acc[dateString] = [];
+      }
+      
       const userInscription = inscriptions.find(
         inscription => inscription.creneau_id === creneau.id
       );
       
-      return {
+      acc[dateString].push({
         ...creneau,
         userInscription
-      };
-    });
+      });
+      
+      return acc;
+    }, {} as Record<string, any[]>);
+
+    // Retourner uniquement les jours avec des créneaux
+    return Object.entries(creneauxByDate).map(([dateString, dayCreneaux]) => ({
+      date: new Date(dateString),
+      creneaux: dayCreneaux
+    })).sort((a, b) => a.date.getTime() - b.date.getTime());
   };
 
-  const renderDay = (date: Date) => {
-    const dayCreneaux = getCreneauxForDay(date);
-    const hasCreneaux = dayCreneaux.length > 0;
-    
+  const renderDayCard = ({ date, creneaux: dayCreneaux }: { date: Date; creneaux: any[] }) => {
     return (
-      <div
-        key={date.toISOString()}
-        className={`
-          min-h-[80px] p-2 border border-border/20 
-          ${!isSameMonth(date, monthStart) ? 'text-muted-foreground bg-muted/20' : 'bg-background'}
-          ${isToday(date) ? 'bg-primary/5 border-primary/30' : ''}
-          ${hasCreneaux ? 'hover:bg-accent/10' : ''}
-        `}
-      >
-        <div className={`text-sm font-medium mb-1 ${isToday(date) ? 'text-primary' : ''}`}>
-          {format(date, 'd')}
+      <Card key={date.toISOString()} className={`
+        p-4 border border-border/50 hover:border-border transition-colors
+        ${isToday(date) ? 'bg-primary/5 border-primary/30' : 'bg-background'}
+      `}>
+        <div className="mb-3">
+          <div className={`text-lg font-semibold ${isToday(date) ? 'text-primary' : ''}`}>
+            {format(date, 'EEEE d', { locale: fr })}
+          </div>
+          <div className="text-sm text-muted-foreground">
+            {format(date, 'MMMM yyyy', { locale: fr })}
+          </div>
         </div>
         
-        {dayCreneaux.map((creneau) => (
-          <div key={creneau.id} className="mb-1">
-            <Badge 
-              variant="outline" 
-              className={`text-xs px-1 py-0 h-auto ${
-                creneau.userInscription 
-                  ? creneau.userInscription.confirme 
-                    ? 'bg-green-100 text-green-800 border-green-300' 
-                    : 'bg-yellow-100 text-yellow-800 border-yellow-300'
-                  : 'bg-blue-100 text-blue-800 border-blue-300'
-              }`}
-            >
-              {creneau.heure_debut}
+        <div className="space-y-2">
+          {dayCreneaux.map((creneau) => (
+            <div key={creneau.id} className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Badge 
+                  variant="outline" 
+                  className={`text-xs ${
+                    creneau.userInscription 
+                      ? creneau.userInscription.confirme 
+                        ? 'bg-green-100 text-green-800 border-green-300' 
+                        : 'bg-yellow-100 text-yellow-800 border-yellow-300'
+                      : 'bg-blue-100 text-blue-800 border-blue-300'
+                  }`}
+                >
+                  {format(new Date(`2000-01-01T${creneau.heure_debut}`), 'HH:mm')} - {format(new Date(`2000-01-01T${creneau.heure_fin}`), 'HH:mm')}
+                </Badge>
+                <span className="text-sm text-muted-foreground">
+                  {creneau.type_activite?.nom}
+                </span>
+              </div>
               {creneau.userInscription && (
-                <span className="ml-1">
+                <span className="text-lg">
                   {creneau.userInscription.confirme ? '✓' : '⏳'}
                 </span>
               )}
-            </Badge>
-          </div>
-        ))}
-      </div>
+            </div>
+          ))}
+        </div>
+      </Card>
     );
   };
 
@@ -204,17 +217,15 @@ const PlanningMensuel = ({ selectedMonth, onMonthChange }: PlanningMensuelProps)
           </div>
         </div>
 
-        {/* Calendrier */}
-        <div className="grid grid-cols-7 gap-1">
-          {/* En-têtes des jours */}
-          {['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'].map((day) => (
-            <div key={day} className="p-2 text-center text-sm font-medium text-muted-foreground">
-              {day}
+        {/* Jours avec créneaux */}
+        <div className="space-y-4">
+          {getDaysWithCreneaux().length > 0 ? (
+            getDaysWithCreneaux().map(renderDayCard)
+          ) : (
+            <div className="text-center py-8 text-muted-foreground">
+              Aucun créneau disponible ce mois-ci
             </div>
-          ))}
-          
-          {/* Jours du calendrier */}
-          {calendarDays.map(renderDay)}
+          )}
         </div>
       </CardContent>
     </Card>
