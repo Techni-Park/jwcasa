@@ -266,24 +266,20 @@ const Home = () => {
 
         {/* Actions rapides */}
         <div className="space-y-4">
-          <Card className="gradient-card shadow-soft border-border/50 hover:shadow-medium transition-all duration-300">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-foreground">
-                <span className="text-xl">📝</span>
-                Nouveau rapport
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground mb-4">
-                Saisissez un nouveau rapport d'activité de diffusion
-              </p>
-              <Link to="/rapport">
-                <Button className="w-full">
-                  Créer un rapport
-                </Button>
-              </Link>
-            </CardContent>
-          </Card>
+          {/* Mes inscriptions en attente */}
+          {user && (
+            <Card className="gradient-card shadow-soft border-border/50 border-l-4 border-l-warning">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-foreground">
+                  <span className="text-xl">⏳</span>
+                  Mes inscriptions en attente
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <MesInscriptionsEnAttente />
+              </CardContent>
+            </Card>
+          )}
 
           <Card className="gradient-card shadow-soft border-border/50 hover:shadow-medium transition-all duration-300">
             <CardHeader>
@@ -303,25 +299,27 @@ const Home = () => {
               </Link>
             </CardContent>
           </Card>
-        </div>
-      </div>
 
-      {/* Mes inscriptions en attente */}
-      {user && (
-        <div className="mb-6">
-          <Card className="gradient-card shadow-soft border-border/50 border-l-4 border-l-warning">
+          <Card className="gradient-card shadow-soft border-border/50 hover:shadow-medium transition-all duration-300">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-foreground">
-                <span className="text-xl">⏳</span>
-                Mes inscriptions en attente
+                <span className="text-xl">📝</span>
+                Nouveau rapport
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <MesInscriptionsEnAttente />
+              <p className="text-muted-foreground mb-4">
+                Saisissez un nouveau rapport d'activité de diffusion
+              </p>
+              <Link to="/rapport">
+                <Button className="w-full">
+                  Créer un rapport
+                </Button>
+              </Link>
             </CardContent>
           </Card>
         </div>
-      )}
+      </div>
 
       {/* Alertes et notifications */}
       {stats.inscriptionsEnAttente > 0 && (
