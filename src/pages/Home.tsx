@@ -6,9 +6,127 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Badge } from '@/components/ui/badge';
+import { Loader2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
+import { format } from 'date-fns';
+import { fr } from 'date-fns/locale';
+
+const MesInscriptionsEnAttente = () => {
+  const { user } = useAuth();
+  const [inscriptionsEnAttente, setInscriptionsEnAttente] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [proclamateurData, setProclamateurData] = useState<any>(null);
+
+  useEffect(() => {
+    if (user) {
+      loadProclamateurData();
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (proclamateurData) {
+      loadInscriptionsEnAttente();
+    }
+  }, [proclamateurData]);
+
+  const loadProclamateurData = async () => {
+    try {
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('user_id', user?.id)
+        .single();
+
+      if (profiles) {
+        const { data: proclamateurs } = await supabase
+          .from('proclamateurs')
+          .select('*')
+          .eq('profile_id', profiles.id)
+          .single();
+
+        setProclamateurData(proclamateurs);
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement des données proclamateur:', error);
+    }
+  };
+
+  const loadInscriptionsEnAttente = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('inscriptions')
+        .select(`
+          *,
+          creneaux(
+            date_creneau,
+            heure_debut,
+            heure_fin,
+            type_activite(nom)
+          )
+        `)
+        .eq('proclamateur_id', proclamateurData.id)
+        .eq('confirme', false)
+        .order('date_inscription', { ascending: false });
+
+      if (error) throw error;
+      setInscriptionsEnAttente(data || []);
+    } catch (error) {
+      console.error('Erreur lors du chargement des inscriptions en attente:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return <div className="flex items-center justify-center py-4"><Loader2 className="h-6 w-6 animate-spin" /></div>;
+  }
+
+  if (inscriptionsEnAttente.length === 0) {
+    return (
+      <div className="text-center py-4 text-muted-foreground">
+        <p>Aucune inscription en attente</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {inscriptionsEnAttente.map((inscription) => (
+        <div
+          key={inscription.id}
+          className="p-3 border rounded-lg bg-yellow-50 border-yellow-200"
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="font-medium text-foreground">
+                {inscription.creneaux?.type_activite?.nom}
+              </div>
+              <div className="text-sm text-muted-foreground">
+                {format(new Date(inscription.creneaux?.date_creneau), 'EEEE d MMMM yyyy', { locale: fr })}
+                {' • '}
+                {inscription.creneaux?.heure_debut} - {inscription.creneaux?.heure_fin}
+              </div>
+              {inscription.notes && (
+                <div className="text-sm text-muted-foreground mt-1">
+                  Notes: {inscription.notes}
+                </div>
+              )}
+            </div>
+            <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-300">
+              En attente
+            </Badge>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};
 
 const Home = () => {
+  const { user } = useAuth();
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
   const [stats, setStats] = useState({
     totalRapports: 0,
@@ -187,6 +305,23 @@ const Home = () => {
           </Card>
         </div>
       </div>
+
+      {/* Mes inscriptions en attente */}
+      {user && (
+        <div className="mb-6">
+          <Card className="gradient-card shadow-soft border-border/50 border-l-4 border-l-warning">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-foreground">
+                <span className="text-xl">⏳</span>
+                Mes inscriptions en attente
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <MesInscriptionsEnAttente />
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Alertes et notifications */}
       {stats.inscriptionsEnAttente > 0 && (
