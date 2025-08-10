@@ -6,16 +6,32 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
+import { format } from 'date-fns';
+import { fr } from 'date-fns/locale';
 
-interface Inscription {
-  id: number;
-  nom: string;
-  sexe: string;
-  date: string;
-  creneau: string;
-  type: string;
-  statut: 'en_attente' | 'valide' | 'refuse';
-  createdAt: string;
+interface PendingInscription {
+  id: string;
+  creneau_id: string;
+  proclamateur_id: string;
+  date_inscription: string;
+  confirme: boolean;
+  notes: string | null;
+  creneaux: {
+    date_creneau: string;
+    heure_debut: string;
+    heure_fin: string;
+    type_activite: {
+      nom: string;
+    } | null;
+  } | null;
+  proclamateurs: {
+    profiles: {
+      nom: string;
+      prenom: string;
+    } | null;
+  } | null;
 }
 
 interface Rapport {
@@ -35,49 +51,136 @@ interface Rapport {
 
 const AdminPanel = () => {
   const { toast } = useToast();
-  const [inscriptions, setInscriptions] = useState<Inscription[]>([]);
+  const { user } = useAuth();
+  const [pendingInscriptions, setPendingInscriptions] = useState<PendingInscription[]>([]);
   const [rapports, setRapports] = useState<Rapport[]>([]);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [userRole, setUserRole] = useState<string | null>(null);
 
-  // Authentification simple (mot de passe: admin123)
-  const handleAuth = () => {
-    if (password === 'admin123') {
-      setIsAuthenticated(true);
-      loadData();
-    } else {
+  useEffect(() => {
+    if (user) {
+      checkUserRole();
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (userRole === 'admin') {
+      loadPendingInscriptions();
+      loadReports();
+    }
+  }, [userRole]);
+
+  const checkUserRole = async () => {
+    try {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('user_id', user?.id)
+        .single();
+
+      if (profile) {
+        setUserRole(profile.role);
+      }
+    } catch (error) {
+      console.error('Erreur lors de la vérification du rôle:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const loadPendingInscriptions = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('inscriptions')
+        .select(`
+          *,
+          creneaux(
+            date_creneau,
+            heure_debut,
+            heure_fin,
+            type_activite(nom)
+          ),
+          proclamateurs(
+            profiles(nom, prenom)
+          )
+        `)
+        .eq('confirme', false)
+        .order('date_inscription', { ascending: false });
+
+      if (error) throw error;
+      setPendingInscriptions(data || []);
+    } catch (error) {
+      console.error('Erreur lors du chargement des inscriptions:', error);
       toast({
         title: "Erreur",
-        description: "Mot de passe incorrect",
+        description: "Impossible de charger les inscriptions en attente",
         variant: "destructive"
       });
     }
   };
 
-  const loadData = () => {
-    const savedInscriptions = JSON.parse(localStorage.getItem('inscriptions') || '[]');
+  const loadReports = async () => {
+    // Keep existing localStorage logic for now
     const savedRapports = JSON.parse(localStorage.getItem('rapports') || '[]');
-    setInscriptions(savedInscriptions);
     setRapports(savedRapports);
   };
 
-  const updateInscriptionStatus = (id: number, statut: 'valide' | 'refuse') => {
-    const updatedInscriptions = inscriptions.map(ins => 
-      ins.id === id ? { ...ins, statut } : ins
-    );
-    setInscriptions(updatedInscriptions);
-    localStorage.setItem('inscriptions', JSON.stringify(updatedInscriptions));
-    
-    toast({
-      title: "Succès",
-      description: `Inscription ${statut === 'valide' ? 'validée' : 'refusée'}`,
-    });
+  const approveInscription = async (inscriptionId: string) => {
+    try {
+      const { error } = await supabase
+        .from('inscriptions')
+        .update({ confirme: true })
+        .eq('id', inscriptionId);
+
+      if (error) throw error;
+
+      // Refresh the list
+      loadPendingInscriptions();
+      
+      toast({
+        title: "Succès",
+        description: "Inscription approuvée avec succès",
+      });
+    } catch (error) {
+      console.error('Erreur lors de l\'approbation:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible d'approuver l'inscription",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const rejectInscription = async (inscriptionId: string) => {
+    try {
+      const { error } = await supabase
+        .from('inscriptions')
+        .delete()
+        .eq('id', inscriptionId);
+
+      if (error) throw error;
+
+      // Refresh the list
+      loadPendingInscriptions();
+      
+      toast({
+        title: "Succès",
+        description: "Inscription refusée",
+      });
+    } catch (error) {
+      console.error('Erreur lors du refus:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de refuser l'inscription",
+        variant: "destructive"
+      });
+    }
   };
 
   // Calcul des statistiques
   const stats = {
-    inscriptionsEnAttente: inscriptions.filter(i => i.statut === 'en_attente').length,
-    inscriptionsValidees: inscriptions.filter(i => i.statut === 'valide').length,
+    inscriptionsEnAttente: pendingInscriptions.length,
+    inscriptionsValidees: 0, // TODO: Calculate confirmed inscriptions
     rapportsMois: rapports.filter(r => {
       const rapportDate = new Date(r.date);
       const now = new Date();
@@ -91,31 +194,30 @@ const AdminPanel = () => {
     )
   };
 
-  if (!isAuthenticated) {
+  if (loading) {
+    return (
+      <Layout title="Administration">
+        <div className="flex items-center justify-center py-8">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+            <p>Chargement...</p>
+          </div>
+        </div>
+      </Layout>
+    );
+  }
+
+  if (!user || userRole !== 'admin') {
     return (
       <Layout title="Administration">
         <div className="max-w-md mx-auto">
           <Card className="gradient-card shadow-soft border-border/50">
             <CardHeader>
-              <CardTitle className="text-center">🔐 Accès Administration</CardTitle>
+              <CardTitle className="text-center">🔐 Accès non autorisé</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-2">Mot de passe</label>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full px-3 py-2 border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary"
-                  placeholder="Entrez le mot de passe"
-                  onKeyPress={(e) => e.key === 'Enter' && handleAuth()}
-                />
-              </div>
-              <Button onClick={handleAuth} className="w-full">
-                Se connecter
-              </Button>
-              <p className="text-xs text-muted-foreground text-center">
-                Mot de passe de démonstration: admin123
+            <CardContent>
+              <p className="text-center text-muted-foreground">
+                Vous devez être administrateur pour accéder à cette page.
               </p>
             </CardContent>
           </Card>
@@ -171,47 +273,57 @@ const AdminPanel = () => {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {inscriptions.length === 0 ? (
-                  <p className="text-muted-foreground text-center py-8">Aucune inscription</p>
+                {pendingInscriptions.length === 0 ? (
+                  <p className="text-muted-foreground text-center py-8">Aucune inscription en attente</p>
                 ) : (
-                  inscriptions.map((inscription) => (
+                  pendingInscriptions.map((inscription) => (
                     <div key={inscription.id} className="border border-border rounded-lg p-4 space-y-2">
                       <div className="flex justify-between items-start">
                         <div>
-                          <h3 className="font-semibold text-foreground">{inscription.nom}</h3>
+                          <h3 className="font-semibold text-foreground">
+                            {inscription.proclamateurs?.profiles?.prenom} {inscription.proclamateurs?.profiles?.nom}
+                          </h3>
                           <p className="text-sm text-muted-foreground">
-                            {inscription.sexe} • {inscription.type}
+                            Type: {inscription.creneaux?.type_activite?.nom || 'Non spécifié'}
                           </p>
                           <p className="text-sm text-muted-foreground">
-                            {new Date(inscription.date).toLocaleDateString('fr-FR')} • {inscription.creneau}
+                            Date: {inscription.creneaux?.date_creneau ? 
+                              format(new Date(inscription.creneaux.date_creneau), 'dd/MM/yyyy', { locale: fr }) : 
+                              'Non spécifiée'
+                            }
                           </p>
+                          <p className="text-sm text-muted-foreground">
+                            Heure: {inscription.creneaux?.heure_debut || 'Non spécifiée'} - {inscription.creneaux?.heure_fin || 'Non spécifiée'}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Inscription le: {format(new Date(inscription.date_inscription), 'dd/MM/yyyy à HH:mm', { locale: fr })}
+                          </p>
+                          {inscription.notes && (
+                            <p className="text-sm text-muted-foreground mt-2">
+                              <strong>Notes:</strong> {inscription.notes}
+                            </p>
+                          )}
                         </div>
-                        <Badge variant={
-                          inscription.statut === 'valide' ? 'default' :
-                          inscription.statut === 'refuse' ? 'destructive' : 'secondary'
-                        }>
-                          {inscription.statut === 'en_attente' ? 'En attente' :
-                           inscription.statut === 'valide' ? 'Validée' : 'Refusée'}
+                        <Badge variant="secondary">
+                          En attente
                         </Badge>
                       </div>
                       
-                      {inscription.statut === 'en_attente' && (
-                        <div className="flex gap-2 pt-2">
-                          <Button
-                            size="sm"
-                            onClick={() => updateInscriptionStatus(inscription.id, 'valide')}
-                          >
-                            Valider
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            onClick={() => updateInscriptionStatus(inscription.id, 'refuse')}
-                          >
-                            Refuser
-                          </Button>
-                        </div>
-                      )}
+                      <div className="flex gap-2 pt-2">
+                        <Button
+                          size="sm"
+                          onClick={() => approveInscription(inscription.id)}
+                        >
+                          Approuver
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => rejectInscription(inscription.id)}
+                        >
+                          Refuser
+                        </Button>
+                      </div>
                     </div>
                   ))
                 )}
@@ -296,14 +408,14 @@ const AdminPanel = () => {
         </TabsContent>
       </Tabs>
 
-      {/* Bouton de déconnexion */}
+      {/* Navigation */}
       <div className="pt-6">
         <Button 
           variant="outline" 
-          onClick={() => setIsAuthenticated(false)}
+          onClick={() => window.location.href = '/'}
           className="w-full"
         >
-          Se déconnecter
+          Retour à l'accueil
         </Button>
       </div>
     </Layout>
