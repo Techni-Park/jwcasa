@@ -20,7 +20,7 @@ const PlanningMensuel = ({ selectedMonth, onMonthChange }: PlanningMensuelProps)
   const [inscriptions, setInscriptions] = useState<any[]>([]);
   const [proclamateurData, setProclamateurData] = useState<any>(null);
   const [typesActivite, setTypesActivite] = useState<any[]>([]);
-  const [selectedActivity, setSelectedActivity] = useState<string>('');
+  const [selectedActivity, setSelectedActivity] = useState<string>('all');
   const [currentMonth, setCurrentMonth] = useState(selectedMonth);
   const [loading, setLoading] = useState(true);
 
@@ -111,7 +111,7 @@ const PlanningMensuel = ({ selectedMonth, onMonthChange }: PlanningMensuelProps)
         .lte('date_creneau', format(monthEnd, 'yyyy-MM-dd'))
         .eq('actif', true);
 
-      if (selectedActivity) {
+      if (selectedActivity && selectedActivity !== 'all') {
         query = query.eq('type_activite_id', selectedActivity);
       }
 
@@ -143,35 +143,59 @@ const PlanningMensuel = ({ selectedMonth, onMonthChange }: PlanningMensuelProps)
     return months;
   };
 
-  const getWeeksInMonth = () => {
+  const getDaysWithCreneaux = () => {
     const monthStart = startOfMonth(new Date(currentMonth + '-01'));
     const monthEnd = endOfMonth(monthStart);
-    const calendarStart = startOfWeek(monthStart, { weekStartsOn: 1 });
     
-    const weeks = eachWeekOfInterval(
-      { start: calendarStart, end: monthEnd },
-      { weekStartsOn: 1 }
-    );
+    const days = eachDayOfInterval({ start: monthStart, end: monthEnd });
+    
+    return days.map(day => {
+      const dayCreneaux = creneaux.filter(creneau => 
+        creneau.date_creneau === format(day, 'yyyy-MM-dd')
+      ).map(creneau => ({
+        ...creneau,
+        userInscription: inscriptions.find(
+          inscription => inscription.creneau_id === creneau.id
+        )
+      }));
 
-    return weeks.map(weekStart => {
-      const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
-      return days.map(day => {
-        const dayCreneaux = creneaux.filter(creneau => 
-          creneau.date_creneau === format(day, 'yyyy-MM-dd')
-        ).map(creneau => ({
-          ...creneau,
-          userInscription: inscriptions.find(
-            inscription => inscription.creneau_id === creneau.id
-          )
-        }));
+      return {
+        date: day,
+        creneaux: dayCreneaux,
+        hasCreneaux: dayCreneaux.length > 0
+      };
+    }).filter(day => day.hasCreneaux);
+  };
 
-        return {
-          date: day,
-          creneaux: dayCreneaux,
-          isCurrentMonth: isSameMonth(day, new Date(currentMonth + '-01'))
-        };
-      });
+  const getWeeksWithDays = () => {
+    const daysWithCreneaux = getDaysWithCreneaux();
+    const weeks = [];
+    let currentWeek = [];
+    
+    daysWithCreneaux.forEach(day => {
+      const dayOfWeek = day.date.getDay();
+      const mondayIndex = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // Convert to Monday=0 format
+      
+      // Fill empty slots if needed
+      while (currentWeek.length < mondayIndex) {
+        currentWeek.push(null);
+      }
+      
+      currentWeek[mondayIndex] = day;
+      
+      // If it's Sunday or we have 7 days, complete the week
+      if (dayOfWeek === 0 || currentWeek.length === 7) {
+        weeks.push([...currentWeek]);
+        currentWeek = [];
+      }
     });
+    
+    // Add remaining days if any
+    if (currentWeek.length > 0) {
+      weeks.push(currentWeek);
+    }
+    
+    return weeks;
   };
 
   const renderDayCell = (day: any) => {
@@ -271,7 +295,7 @@ const PlanningMensuel = ({ selectedMonth, onMonthChange }: PlanningMensuelProps)
                 <SelectValue placeholder="Toutes les activités" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Toutes les activités</SelectItem>
+                <SelectItem value="all">Toutes les activités</SelectItem>
                 {typesActivite.map(type => (
                   <SelectItem key={type.id} value={type.id}>
                     {type.nom}
@@ -307,11 +331,39 @@ const PlanningMensuel = ({ selectedMonth, onMonthChange }: PlanningMensuelProps)
           ))}
         </div>
 
-        {/* Grille calendrier */}
-        <div className="space-y-px">
-          {getWeeksInMonth().map((week, weekIndex) => (
-            <div key={weekIndex} className="grid grid-cols-7 gap-px">
-              {week.map(renderDayCell)}
+        {/* Grille semaines */}
+        <div className="space-y-4">
+          {getWeeksWithDays().map((week, weekIndex) => (
+            <div key={weekIndex} className="grid grid-cols-7 gap-2">
+              {week.map((day, dayIndex) => {
+                if (!day) {
+                  return <div key={dayIndex} className="min-h-[120px]" />;
+                }
+                
+                return (
+                  <Card key={dayIndex} className="min-h-[120px] max-w-[160px] p-3">
+                    <div className="text-sm font-medium mb-2">
+                      {format(day.date, 'dd/MM')}
+                    </div>
+                    <div className="space-y-1">
+                      {day.creneaux.map((creneau: any) => (
+                        <div key={creneau.id} className="flex items-center gap-2 text-xs">
+                          <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                            creneau.userInscription 
+                              ? creneau.userInscription.confirme 
+                                ? 'bg-green-500' 
+                                : 'bg-yellow-500'
+                              : 'bg-blue-500'
+                          }`} />
+                          <span className="truncate">
+                            {format(new Date(`2000-01-01T${creneau.heure_debut}`), 'HH:mm')}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </Card>
+                );
+              })}
             </div>
           ))}
         </div>
