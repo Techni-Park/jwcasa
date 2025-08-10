@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2 } from 'lucide-react';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday, isSameMonth, startOfWeek, eachWeekOfInterval, addDays } from 'date-fns';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday, isSameMonth, startOfWeek, eachWeekOfInterval, addDays, getWeek, isWithinInterval } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -22,6 +22,7 @@ const PlanningMensuel = ({ selectedMonth, onMonthChange }: PlanningMensuelProps)
   const [typesActivite, setTypesActivite] = useState<any[]>([]);
   const [selectedActivity, setSelectedActivity] = useState<string>('all');
   const [currentMonth, setCurrentMonth] = useState(selectedMonth);
+  const [selectedWeek, setSelectedWeek] = useState<string>('all');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -40,6 +41,7 @@ const PlanningMensuel = ({ selectedMonth, onMonthChange }: PlanningMensuelProps)
 
   useEffect(() => {
     setCurrentMonth(selectedMonth);
+    setSelectedWeek('all'); // Reset week selection when month changes
   }, [selectedMonth]);
 
   const loadProclamateurData = async () => {
@@ -143,11 +145,43 @@ const PlanningMensuel = ({ selectedMonth, onMonthChange }: PlanningMensuelProps)
     return months;
   };
 
+  const getWeekOptions = () => {
+    const monthStart = startOfMonth(new Date(currentMonth + '-01'));
+    const monthEnd = endOfMonth(monthStart);
+    const calendarStart = startOfWeek(monthStart, { weekStartsOn: 1 });
+    
+    const weeks = eachWeekOfInterval(
+      { start: calendarStart, end: monthEnd },
+      { weekStartsOn: 1 }
+    );
+
+    return weeks.map((weekStart, index) => {
+      const weekEnd = addDays(weekStart, 6);
+      const weekNumber = getWeek(weekStart, { weekStartsOn: 1 });
+      
+      return {
+        value: `${format(weekStart, 'yyyy-MM-dd')}_${format(weekEnd, 'yyyy-MM-dd')}`,
+        label: `Semaine ${weekNumber} (${format(weekStart, 'd')} - ${format(weekEnd, 'd MMM', { locale: fr })})`
+      };
+    });
+  };
+
   const getDaysWithCreneaux = () => {
     const monthStart = startOfMonth(new Date(currentMonth + '-01'));
     const monthEnd = endOfMonth(monthStart);
     
-    const days = eachDayOfInterval({ start: monthStart, end: monthEnd });
+    let days = eachDayOfInterval({ start: monthStart, end: monthEnd });
+    
+    // Filter by selected week if a specific week is selected
+    if (selectedWeek && selectedWeek !== 'all') {
+      const [weekStartStr, weekEndStr] = selectedWeek.split('_');
+      const weekStart = new Date(weekStartStr);
+      const weekEnd = new Date(weekEndStr);
+      
+      days = days.filter(day => 
+        isWithinInterval(day, { start: weekStart, end: weekEnd })
+      );
+    }
     
     return days.map(day => {
       const dayCreneaux = creneaux.filter(creneau => 
@@ -284,6 +318,21 @@ const PlanningMensuel = ({ selectedMonth, onMonthChange }: PlanningMensuelProps)
                 {getMonthOptions().map(month => (
                   <SelectItem key={month.value} value={month.value}>
                     {month.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="min-w-0 flex-1">
+            <Select value={selectedWeek} onValueChange={setSelectedWeek}>
+              <SelectTrigger>
+                <SelectValue placeholder="Toutes les semaines" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Toutes les semaines</SelectItem>
+                {getWeekOptions().map(week => (
+                  <SelectItem key={week.value} value={week.value}>
+                    {week.label}
                   </SelectItem>
                 ))}
               </SelectContent>
