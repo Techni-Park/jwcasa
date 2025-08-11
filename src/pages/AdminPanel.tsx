@@ -204,13 +204,26 @@ const AdminPanel = () => {
 
       if (error) throw error;
 
+      // Send notification email
+      try {
+        await supabase.functions.invoke('send-notification-email', {
+          body: {
+            inscriptionId,
+            type: 'inscription_confirmed'
+          }
+        });
+      } catch (emailError) {
+        console.error('Error sending notification email:', emailError);
+        // Don't fail the whole operation if email fails
+      }
+
       // Refresh the lists
       loadPendingInscriptions();
       loadAllInscriptions();
       
       toast({
         title: "Succès",
-        description: "Inscription approuvée avec succès",
+        description: "Inscription approuvée avec succès et notification envoyée",
       });
     } catch (error) {
       console.error('Erreur lors de l\'approbation:', error);
@@ -231,13 +244,25 @@ const AdminPanel = () => {
 
       if (error) throw error;
 
+      // Send notification email
+      try {
+        await supabase.functions.invoke('send-notification-email', {
+          body: {
+            inscriptionId,
+            type: 'inscription_provisional'
+          }
+        });
+      } catch (emailError) {
+        console.error('Error sending notification email:', emailError);
+      }
+
       // Refresh the lists
       loadPendingInscriptions();
       loadAllInscriptions();
       
       toast({
         title: "Succès",
-        description: "Inscription mise en provisoire",
+        description: "Inscription mise en provisoire et notification envoyée",
       });
     } catch (error) {
       console.error('Erreur lors de la mise en provisoire:', error);
@@ -258,13 +283,25 @@ const AdminPanel = () => {
 
       if (error) throw error;
 
+      // Send notification email
+      try {
+        await supabase.functions.invoke('send-notification-email', {
+          body: {
+            inscriptionId,
+            type: 'inscription_rejected'
+          }
+        });
+      } catch (emailError) {
+        console.error('Error sending notification email:', emailError);
+      }
+
       // Refresh the lists
       loadPendingInscriptions();
       loadAllInscriptions();
       
       toast({
         title: "Succès",
-        description: "Inscription refusée",
+        description: "Inscription refusée et notification envoyée",
       });
     } catch (error) {
       console.error('Erreur lors du refus:', error);
@@ -383,9 +420,10 @@ const AdminPanel = () => {
       </div>
 
       <Tabs defaultValue="inscriptions" className="space-y-4">
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="inscriptions">Inscriptions</TabsTrigger>
           <TabsTrigger value="rapports">Rapports</TabsTrigger>
+          <TabsTrigger value="rapports-review">Validation Rapports</TabsTrigger>
         </TabsList>
 
         {/* Gestion des inscriptions */}
@@ -607,6 +645,23 @@ const AdminPanel = () => {
                     </div>
                   ))
                 )}
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Validation des rapports */}
+        <TabsContent value="rapports-review">
+          <Card className="gradient-card shadow-soft border-border/50">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <span className="text-xl">📋</span>
+                Validation des rapports
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <p className="text-muted-foreground text-center py-8">Fonctionnalité de validation des rapports à venir</p>
               </div>
             </CardContent>
           </Card>

@@ -10,6 +10,7 @@ import Home from "./pages/Home";
 import RapportForm from "./pages/RapportForm";
 import InscriptionForm from "./pages/InscriptionForm";
 import ProclamateursGestion from "./pages/ProclamateursGestion";
+import RapportsPublics from "./pages/RapportsPublics";
 import AdminPanel from "./pages/AdminPanel";
 import NotFound from "./pages/NotFound";
 
@@ -28,6 +29,7 @@ const App = () => (
             <Route path="/rapport" element={<ProtectedRoute><RapportForm /></ProtectedRoute>} />
             <Route path="/inscription" element={<ProtectedRoute><InscriptionForm /></ProtectedRoute>} />
             <Route path="/proclamateurs" element={<ProtectedRoute><ProclamateursGestion /></ProtectedRoute>} />
+            <Route path="/rapports-publics" element={<ProtectedRoute><RapportsPublics /></ProtectedRoute>} />
             <Route path="/admin" element={<ProtectedRoute><AdminPanel /></ProtectedRoute>} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
