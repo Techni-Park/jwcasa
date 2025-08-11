@@ -226,8 +226,11 @@ export type Database = {
       rapports: {
         Row: {
           annee: number
+          approuve: boolean | null
+          approuve_par: string | null
           created_at: string
           creneau_id: string | null
+          date_approbation: string | null
           etudes_bibliques: number | null
           heures_predication: number | null
           id: string
@@ -238,11 +241,15 @@ export type Database = {
           soumis_le: string | null
           updated_at: string
           videos: number | null
+          visible_publiquement: boolean | null
         }
         Insert: {
           annee: number
+          approuve?: boolean | null
+          approuve_par?: string | null
           created_at?: string
           creneau_id?: string | null
+          date_approbation?: string | null
           etudes_bibliques?: number | null
           heures_predication?: number | null
           id?: string
@@ -253,11 +260,15 @@ export type Database = {
           soumis_le?: string | null
           updated_at?: string
           videos?: number | null
+          visible_publiquement?: boolean | null
         }
         Update: {
           annee?: number
+          approuve?: boolean | null
+          approuve_par?: string | null
           created_at?: string
           creneau_id?: string | null
+          date_approbation?: string | null
           etudes_bibliques?: number | null
           heures_predication?: number | null
           id?: string
@@ -268,6 +279,7 @@ export type Database = {
           soumis_le?: string | null
           updated_at?: string
           videos?: number | null
+          visible_publiquement?: boolean | null
         }
         Relationships: [
           {
@@ -275,6 +287,13 @@ export type Database = {
             columns: ["creneau_id"]
             isOneToOne: false
             referencedRelation: "creneaux"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rapports_approuve_par_fkey"
+            columns: ["approuve_par"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
