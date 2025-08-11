@@ -17,6 +17,7 @@ interface PendingInscription {
   proclamateur_id: string;
   date_inscription: string;
   confirme: boolean;
+  statut: string;
   notes: string | null;
   creneaux: {
     date_creneau: string;
@@ -32,6 +33,13 @@ interface PendingInscription {
       prenom: string;
     } | null;
   } | null;
+}
+
+interface InscriptionStats {
+  proclamateur_id: string;
+  monthlyCount: number;
+  approvedForActivity: number;
+  otherMonthlyInscriptions: PendingInscription[];
 }
 
 interface Rapport {
@@ -53,6 +61,8 @@ const AdminPanel = () => {
   const { toast } = useToast();
   const { user } = useAuth();
   const [pendingInscriptions, setPendingInscriptions] = useState<PendingInscription[]>([]);
+  const [allInscriptions, setAllInscriptions] = useState<PendingInscription[]>([]);
+  const [inscriptionStats, setInscriptionStats] = useState<Map<string, InscriptionStats>>(new Map());
   const [rapports, setRapports] = useState<Rapport[]>([]);
   const [loading, setLoading] = useState(true);
   const [userRole, setUserRole] = useState<string | null>(null);
@@ -66,6 +76,7 @@ const AdminPanel = () => {
   useEffect(() => {
     if (userRole === 'admin') {
       loadPendingInscriptions();
+      loadAllInscriptions();
       loadReports();
     }
   }, [userRole]);
@@ -104,7 +115,7 @@ const AdminPanel = () => {
             profiles(nom, prenom)
           )
         `)
-        .eq('confirme', false)
+        .in('statut', ['en_attente', 'provisoire'])
         .order('date_inscription', { ascending: false });
 
       if (error) throw error;
@@ -119,6 +130,65 @@ const AdminPanel = () => {
     }
   };
 
+  const loadAllInscriptions = async () => {
+    try {
+      const currentMonth = new Date().getMonth() + 1;
+      const currentYear = new Date().getFullYear();
+      
+      const { data, error } = await supabase
+        .from('inscriptions')
+        .select(`
+          *,
+          creneaux(
+            date_creneau,
+            heure_debut,
+            heure_fin,
+            type_activite(nom)
+          ),
+          proclamateurs(
+            profiles(nom, prenom)
+          )
+        `)
+        .gte('creneaux.date_creneau', `${currentYear}-${currentMonth.toString().padStart(2, '0')}-01`)
+        .lt('creneaux.date_creneau', `${currentYear}-${(currentMonth + 1).toString().padStart(2, '0')}-01`);
+
+      if (error) throw error;
+      setAllInscriptions(data || []);
+      calculateInscriptionStats(data || []);
+    } catch (error) {
+      console.error('Erreur lors du chargement de toutes les inscriptions:', error);
+    }
+  };
+
+  const calculateInscriptionStats = (inscriptions: PendingInscription[]) => {
+    const stats = new Map<string, InscriptionStats>();
+    
+    inscriptions.forEach(inscription => {
+      const key = inscription.proclamateur_id;
+      if (!stats.has(key)) {
+        stats.set(key, {
+          proclamateur_id: key,
+          monthlyCount: 0,
+          approvedForActivity: 0,
+          otherMonthlyInscriptions: []
+        });
+      }
+      
+      const stat = stats.get(key)!;
+      stat.monthlyCount++;
+      
+      if (inscription.statut === 'confirme') {
+        stat.approvedForActivity++;
+      }
+      
+      if (inscription.id !== inscription.id) { // Will be updated in the component
+        stat.otherMonthlyInscriptions.push(inscription);
+      }
+    });
+    
+    setInscriptionStats(stats);
+  };
+
   const loadReports = async () => {
     // Keep existing localStorage logic for now
     const savedRapports = JSON.parse(localStorage.getItem('rapports') || '[]');
@@ -129,13 +199,14 @@ const AdminPanel = () => {
     try {
       const { error } = await supabase
         .from('inscriptions')
-        .update({ confirme: true })
+        .update({ confirme: true, statut: 'confirme' })
         .eq('id', inscriptionId);
 
       if (error) throw error;
 
-      // Refresh the list
+      // Refresh the lists
       loadPendingInscriptions();
+      loadAllInscriptions();
       
       toast({
         title: "Succès",
@@ -151,17 +222,45 @@ const AdminPanel = () => {
     }
   };
 
-  const rejectInscription = async (inscriptionId: string) => {
+  const setProvisionalInscription = async (inscriptionId: string) => {
     try {
       const { error } = await supabase
         .from('inscriptions')
-        .delete()
+        .update({ statut: 'provisoire' })
         .eq('id', inscriptionId);
 
       if (error) throw error;
 
-      // Refresh the list
+      // Refresh the lists
       loadPendingInscriptions();
+      loadAllInscriptions();
+      
+      toast({
+        title: "Succès",
+        description: "Inscription mise en provisoire",
+      });
+    } catch (error) {
+      console.error('Erreur lors de la mise en provisoire:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de mettre l'inscription en provisoire",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const rejectInscription = async (inscriptionId: string) => {
+    try {
+      const { error } = await supabase
+        .from('inscriptions')
+        .update({ statut: 'refuse' })
+        .eq('id', inscriptionId);
+
+      if (error) throw error;
+
+      // Refresh the lists
+      loadPendingInscriptions();
+      loadAllInscriptions();
       
       toast({
         title: "Succès",
@@ -174,6 +273,33 @@ const AdminPanel = () => {
         description: "Impossible de refuser l'inscription",
         variant: "destructive"
       });
+    }
+  };
+
+  const getPriorityLevel = (inscription: PendingInscription): 'high' | 'medium' | 'low' => {
+    const stats = inscriptionStats.get(inscription.proclamateur_id);
+    if (!stats) return 'medium';
+    
+    if (stats.monthlyCount <= 2) return 'high';
+    if (stats.monthlyCount <= 4) return 'medium';
+    return 'low';
+  };
+
+  const getPriorityColor = (priority: 'high' | 'medium' | 'low'): string => {
+    switch (priority) {
+      case 'high': return 'text-success border-success bg-success/10';
+      case 'medium': return 'text-warning border-warning bg-warning/10';
+      case 'low': return 'text-destructive border-destructive bg-destructive/10';
+      default: return '';
+    }
+  };
+
+  const getPriorityText = (priority: 'high' | 'medium' | 'low'): string => {
+    switch (priority) {
+      case 'high': return 'Priorité haute';
+      case 'medium': return 'Priorité normale';
+      case 'low': return 'Priorité faible';
+      default: return '';
     }
   };
 
@@ -273,60 +399,139 @@ const AdminPanel = () => {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {pendingInscriptions.length === 0 ? (
-                  <p className="text-muted-foreground text-center py-8">Aucune inscription en attente</p>
-                ) : (
-                  pendingInscriptions.map((inscription) => (
-                    <div key={inscription.id} className="border border-border rounded-lg p-4 space-y-2">
-                      <div className="flex justify-between items-start">
-                        <div>
-                          <h3 className="font-semibold text-foreground">
-                            {inscription.proclamateurs?.profiles?.prenom} {inscription.proclamateurs?.profiles?.nom}
-                          </h3>
-                          <p className="text-sm text-muted-foreground">
-                            Type: {inscription.creneaux?.type_activite?.nom || 'Non spécifié'}
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            Date: {inscription.creneaux?.date_creneau ? 
-                              format(new Date(inscription.creneaux.date_creneau), 'dd/MM/yyyy', { locale: fr }) : 
-                              'Non spécifiée'
-                            }
-                          </p>
-                          <p className="text-sm text-muted-foreground">
-                            Heure: {inscription.creneaux?.heure_debut || 'Non spécifiée'} - {inscription.creneaux?.heure_fin || 'Non spécifiée'}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            Inscription le: {format(new Date(inscription.date_inscription), 'dd/MM/yyyy à HH:mm', { locale: fr })}
-                          </p>
-                          {inscription.notes && (
-                            <p className="text-sm text-muted-foreground mt-2">
-                              <strong>Notes:</strong> {inscription.notes}
-                            </p>
-                          )}
-                        </div>
-                        <Badge variant="secondary">
-                          En attente
-                        </Badge>
-                      </div>
-                      
-                      <div className="flex gap-2 pt-2">
-                        <Button
-                          size="sm"
-                          onClick={() => approveInscription(inscription.id)}
-                        >
-                          Approuver
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => rejectInscription(inscription.id)}
-                        >
-                          Refuser
-                        </Button>
-                      </div>
-                    </div>
-                  ))
-                )}
+                 {pendingInscriptions.length === 0 ? (
+                   <p className="text-muted-foreground text-center py-8">Aucune inscription en attente</p>
+                 ) : (
+                   pendingInscriptions
+                     .sort((a, b) => {
+                       const priorityOrder = { 'high': 0, 'medium': 1, 'low': 2 };
+                       const priorityA = getPriorityLevel(a);
+                       const priorityB = getPriorityLevel(b);
+                       return priorityOrder[priorityA] - priorityOrder[priorityB];
+                     })
+                     .map((inscription) => {
+                       const priority = getPriorityLevel(inscription);
+                       const stats = inscriptionStats.get(inscription.proclamateur_id);
+                       const otherInscriptions = allInscriptions.filter(
+                         (ins) => ins.proclamateur_id === inscription.proclamateur_id && ins.id !== inscription.id
+                       );
+                       const approvedForActivity = allInscriptions.filter(
+                         (ins) => ins.creneau_id === inscription.creneau_id && ins.statut === 'confirme'
+                       ).length;
+
+                       return (
+                         <div key={inscription.id} className="border border-border rounded-lg p-4 space-y-2">
+                           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                             {/* Colonne gauche - Info principale + inscriptions approuvées */}
+                             <div className="lg:col-span-1 space-y-2">
+                               <div className="flex items-center gap-2">
+                                 <h3 className="font-semibold text-foreground">
+                                   {inscription.proclamateurs?.profiles?.prenom} {inscription.proclamateurs?.profiles?.nom}
+                                 </h3>
+                                 <Badge className={`text-xs ${getPriorityColor(priority)}`}>
+                                   {getPriorityText(priority)}
+                                 </Badge>
+                               </div>
+                               
+                               <p className="text-sm text-muted-foreground">
+                                 Type: {inscription.creneaux?.type_activite?.nom || 'Non spécifié'}
+                               </p>
+                               <p className="text-sm text-muted-foreground">
+                                 Date: {inscription.creneaux?.date_creneau ? 
+                                   format(new Date(inscription.creneaux.date_creneau), 'dd/MM/yyyy', { locale: fr }) : 
+                                   'Non spécifiée'
+                                 }
+                               </p>
+                               <p className="text-sm text-muted-foreground">
+                                 Heure: {inscription.creneaux?.heure_debut || 'Non spécifiée'} - {inscription.creneaux?.heure_fin || 'Non spécifiée'}
+                               </p>
+                               <p className="text-xs text-muted-foreground">
+                                 Inscription le: {format(new Date(inscription.date_inscription), 'dd/MM/yyyy à HH:mm', { locale: fr })}
+                               </p>
+                               
+                               <div className="bg-muted/20 p-2 rounded text-xs">
+                                 <strong>Déjà approuvés pour cette activité:</strong> {approvedForActivity}
+                               </div>
+                               
+                               {inscription.notes && (
+                                 <p className="text-sm text-muted-foreground mt-2">
+                                   <strong>Notes:</strong> {inscription.notes}
+                                 </p>
+                               )}
+                             </div>
+
+                             {/* Colonne centrale - Actions */}
+                             <div className="lg:col-span-1 flex flex-col justify-center space-y-2">
+                               <Badge variant={inscription.statut === 'provisoire' ? 'secondary' : 'outline'}>
+                                 {inscription.statut === 'en_attente' ? 'En attente' : 
+                                  inscription.statut === 'provisoire' ? 'Provisoire' : inscription.statut}
+                               </Badge>
+                               
+                               <div className="flex flex-col gap-2">
+                                 <Button
+                                   size="sm"
+                                   onClick={() => approveInscription(inscription.id)}
+                                   className="w-full"
+                                 >
+                                   Approuver
+                                 </Button>
+                                 <Button
+                                   size="sm"
+                                   variant="outline"
+                                   onClick={() => setProvisionalInscription(inscription.id)}
+                                   className="w-full"
+                                   disabled={inscription.statut === 'provisoire'}
+                                 >
+                                   Mettre en provisoire
+                                 </Button>
+                                 <Button
+                                   size="sm"
+                                   variant="destructive"
+                                   onClick={() => rejectInscription(inscription.id)}
+                                   className="w-full"
+                                 >
+                                   Refuser
+                                 </Button>
+                               </div>
+                             </div>
+
+                             {/* Colonne droite - Autres inscriptions du mois */}
+                             <div className="lg:col-span-1 space-y-2">
+                               <h4 className="text-sm font-medium text-foreground">
+                                 Autres inscriptions ce mois ({stats?.monthlyCount || 0})
+                               </h4>
+                               <div className="max-h-32 overflow-y-auto space-y-1">
+                                 {otherInscriptions.length === 0 ? (
+                                   <p className="text-xs text-muted-foreground">Aucune autre inscription</p>
+                                 ) : (
+                                   otherInscriptions.map((other) => (
+                                     <div key={other.id} className="text-xs p-2 bg-muted/10 rounded">
+                                       <div className="flex justify-between items-center">
+                                         <span>
+                                           {other.creneaux?.date_creneau ? 
+                                             format(new Date(other.creneaux.date_creneau), 'dd/MM', { locale: fr }) : 
+                                             'Date inconnue'
+                                           }
+                                         </span>
+                                         <Badge variant="outline" className="text-xs">
+                                           {other.statut === 'confirme' ? '✅' : 
+                                            other.statut === 'provisoire' ? '⏰' : 
+                                            other.statut === 'en_attente' ? '⏳' : '❌'}
+                                         </Badge>
+                                       </div>
+                                       <span className="text-muted-foreground">
+                                         {other.creneaux?.type_activite?.nom || 'Activité inconnue'}
+                                       </span>
+                                     </div>
+                                   ))
+                                 )}
+                               </div>
+                             </div>
+                           </div>
+                         </div>
+                       );
+                     })
+                 )}
               </div>
             </CardContent>
           </Card>

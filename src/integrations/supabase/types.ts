@@ -80,6 +80,7 @@ export type Database = {
           id: string
           notes: string | null
           proclamateur_id: string
+          statut: string | null
         }
         Insert: {
           confirme?: boolean | null
@@ -89,6 +90,7 @@ export type Database = {
           id?: string
           notes?: string | null
           proclamateur_id: string
+          statut?: string | null
         }
         Update: {
           confirme?: boolean | null
@@ -98,6 +100,7 @@ export type Database = {
           id?: string
           notes?: string | null
           proclamateur_id?: string
+          statut?: string | null
         }
         Relationships: [
           {
