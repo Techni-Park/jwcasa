@@ -11,6 +11,7 @@ import RapportForm from "./pages/RapportForm";
 import InscriptionForm from "./pages/InscriptionForm";
 import ProclamateursGestion from "./pages/ProclamateursGestion";
 import AdminPanel from "./pages/AdminPanel";
+import Parametrage from "./pages/Parametrage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -29,6 +30,7 @@ const App = () => (
             <Route path="/inscription" element={<ProtectedRoute><InscriptionForm /></ProtectedRoute>} />
             <Route path="/proclamateurs" element={<ProtectedRoute><ProclamateursGestion /></ProtectedRoute>} />
             <Route path="/admin" element={<ProtectedRoute><AdminPanel /></ProtectedRoute>} />
+            <Route path="/parametrage" element={<ProtectedRoute><Parametrage /></ProtectedRoute>} />
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
           </Routes>

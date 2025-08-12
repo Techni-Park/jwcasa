@@ -71,6 +71,56 @@ export type Database = {
           },
         ]
       }
+      creneaux_recurrents: {
+        Row: {
+          actif: boolean | null
+          created_at: string
+          date_debut: string
+          date_fin: string
+          heure_debut: string
+          heure_fin: string
+          id: string
+          jours_semaine: number[]
+          semaines_mois: number[]
+          type_activite_id: string
+          updated_at: string
+        }
+        Insert: {
+          actif?: boolean | null
+          created_at?: string
+          date_debut: string
+          date_fin: string
+          heure_debut: string
+          heure_fin: string
+          id?: string
+          jours_semaine: number[]
+          semaines_mois: number[]
+          type_activite_id: string
+          updated_at?: string
+        }
+        Update: {
+          actif?: boolean | null
+          created_at?: string
+          date_debut?: string
+          date_fin?: string
+          heure_debut?: string
+          heure_fin?: string
+          id?: string
+          jours_semaine?: number[]
+          semaines_mois?: number[]
+          type_activite_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "creneaux_recurrents_type_activite_id_fkey"
+            columns: ["type_activite_id"]
+            isOneToOne: false
+            referencedRelation: "type_activite"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       inscriptions: {
         Row: {
           confirme: boolean | null
@@ -118,6 +168,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      notifications: {
+        Row: {
+          created_at: string
+          id: string
+          message: string
+          metadata: Json | null
+          read: boolean
+          title: string
+          type: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          message: string
+          metadata?: Json | null
+          read?: boolean
+          title: string
+          type?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          message?: string
+          metadata?: Json | null
+          read?: boolean
+          title?: string
+          type?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       parametrages: {
         Row: {
@@ -315,29 +401,58 @@ export type Database = {
       type_activite: {
         Row: {
           actif: boolean | null
+          auto_create_slots: boolean | null
           created_at: string
+          default_heure_debut: string | null
+          default_heure_fin: string | null
           description: string | null
           duree_minutes: number | null
           id: string
           nom: string
+          recurrence_days: number[] | null
+          recurrence_enabled: boolean | null
+          recurrence_weeks: number[] | null
+          valideur_id: string | null
         }
         Insert: {
           actif?: boolean | null
+          auto_create_slots?: boolean | null
           created_at?: string
+          default_heure_debut?: string | null
+          default_heure_fin?: string | null
           description?: string | null
           duree_minutes?: number | null
           id?: string
           nom: string
+          recurrence_days?: number[] | null
+          recurrence_enabled?: boolean | null
+          recurrence_weeks?: number[] | null
+          valideur_id?: string | null
         }
         Update: {
           actif?: boolean | null
+          auto_create_slots?: boolean | null
           created_at?: string
+          default_heure_debut?: string | null
+          default_heure_fin?: string | null
           description?: string | null
           duree_minutes?: number | null
           id?: string
           nom?: string
+          recurrence_days?: number[] | null
+          recurrence_enabled?: boolean | null
+          recurrence_weeks?: number[] | null
+          valideur_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "type_activite_valideur_id_fkey"
+            columns: ["valideur_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {
