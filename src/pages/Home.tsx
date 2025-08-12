@@ -205,27 +205,41 @@ const Home = () => {
 
         {/* Actions principales */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Tuile Inscription */}
-          <Card 
-            className="gradient-card shadow-soft border-border/50 cursor-pointer hover:shadow-lg transition-all duration-300 aspect-square flex items-center justify-center"
-            onClick={() => navigate('/inscription')}
-          >
-            <CardContent className="p-6 text-center">
-              <div className="text-4xl mb-4">📝</div>
-              <Button size="lg" className="w-full">
+          <Card className="gradient-card shadow-soft border-border/50">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <span className="text-xl">📝</span>
+                Inscription aux créneaux
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-muted-foreground mb-4">
+                Inscrivez-vous aux créneaux d'activité disponibles selon vos disponibilités.
+              </p>
+              <Button 
+                onClick={() => navigate('/inscription')}
+                className="w-full"
+              >
                 S'inscrire à un créneau
               </Button>
             </CardContent>
           </Card>
 
-          {/* Tuile Rapport */}
-          <Card 
-            className="gradient-card shadow-soft border-border/50 cursor-pointer hover:shadow-lg transition-all duration-300 aspect-square flex items-center justify-center"
-            onClick={() => navigate('/rapport')}
-          >
-            <CardContent className="p-6 text-center">
-              <div className="text-4xl mb-4">📊</div>
-              <Button size="lg" className="w-full">
+          <Card className="gradient-card shadow-soft border-border/50">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <span className="text-xl">📊</span>
+                Rapport d'activité
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-muted-foreground mb-4">
+                Rédigez et soumettez vos rapports d'activité de terrain.
+              </p>
+              <Button 
+                onClick={() => navigate('/rapport')}
+                className="w-full"
+              >
                 Nouveau rapport
               </Button>
             </CardContent>
