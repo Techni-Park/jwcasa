@@ -1,107 +1,65 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import Layout from '@/components/Layout';
 import StatsCard from '@/components/StatsCard';
+import PlanningMensuel from '@/components/PlanningMensuel';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Badge } from '@/components/ui/badge';
-import { useToast } from '@/hooks/use-toast';
-import { useAuth } from '@/contexts/AuthContext';
+import { Loader2 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
-interface ConfirmedInscription {
-  id: string;
-  creneaux: {
-    date_creneau: string;
-    heure_debut: string;
-    heure_fin: string;
-    type_activite: {
-      nom: string;
-    } | null;
-  } | null;
-}
-
-const Home = () => {
-  const { toast } = useToast();
+const MesInscriptionsEnAttente = () => {
   const { user } = useAuth();
-  const navigate = useNavigate();
-  const [userProfile, setUserProfile] = useState<any>(null);
-  const [confirmedInscriptions, setConfirmedInscriptions] = useState<ConfirmedInscription[]>([]);
-  const [notifications, setNotifications] = useState<any[]>([]);
-  const [pendingInscriptions, setPendingInscriptions] = useState<any[]>([]);
-  const [userReports, setUserReports] = useState<any[]>([]);
+  const [inscriptionsEnAttente, setInscriptionsEnAttente] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [proclamateurData, setProclamateurData] = useState<any>(null);
 
   useEffect(() => {
     if (user) {
-      loadUserData();
-      loadConfirmedInscriptions();
-      loadNotifications();
+      loadProclamateurData();
     }
   }, [user]);
 
-  const loadUserData = async () => {
+  useEffect(() => {
+    if (proclamateurData) {
+      loadInscriptionsEnAttente();
+    }
+  }, [proclamateurData]);
+
+  const loadProclamateurData = async () => {
     try {
-      const { data: profile } = await supabase
+      const { data: profiles } = await supabase
         .from('profiles')
-        .select('*')
+        .select('id')
         .eq('user_id', user?.id)
         .single();
 
-      setUserProfile(profile);
-
-      if (profile) {
-        const { data: proclamateur } = await supabase
+      if (profiles) {
+        const { data: proclamateurs } = await supabase
           .from('proclamateurs')
-          .select('id')
-          .eq('profile_id', profile.id)
+          .select('*')
+          .eq('profile_id', profiles.id)
           .single();
 
-        if (proclamateur) {
-          // Load pending inscriptions
-          const { data: pending } = await supabase
-            .from('inscriptions')
-            .select('*')
-            .eq('proclamateur_id', proclamateur.id)
-            .in('statut', ['en_attente', 'provisoire']);
-
-          setPendingInscriptions(pending || []);
-
-          // Load user reports (from localStorage for now)
-          const savedReports = JSON.parse(localStorage.getItem('rapports') || '[]');
-          setUserReports(savedReports);
-        }
+        setProclamateurData(proclamateurs);
       }
     } catch (error) {
-      console.error('Erreur lors du chargement des données utilisateur:', error);
+      console.error('Erreur lors du chargement des données proclamateur:', error);
     }
-    setLoading(false);
   };
 
-  const loadConfirmedInscriptions = async () => {
+  const loadInscriptionsEnAttente = async () => {
     try {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('user_id', user?.id)
-        .single();
-
-      if (!profile) return;
-
-      const { data: proclamateur } = await supabase
-        .from('proclamateurs')
-        .select('id')
-        .eq('profile_id', profile.id)
-        .single();
-
-      if (!proclamateur) return;
-
       const { data, error } = await supabase
         .from('inscriptions')
         .select(`
-          id,
+          *,
           creneaux(
             date_creneau,
             heure_debut,
@@ -109,263 +67,283 @@ const Home = () => {
             type_activite(nom)
           )
         `)
-        .eq('proclamateur_id', proclamateur.id)
-        .eq('statut', 'confirme')
-        .gte('creneaux.date_creneau', new Date().toISOString().split('T')[0])
-        .order('creneaux.date_creneau', { ascending: true })
-        .limit(5);
+        .eq('proclamateur_id', proclamateurData.id)
+        .eq('confirme', false)
+        .order('date_inscription', { ascending: false });
 
       if (error) throw error;
-      setConfirmedInscriptions(data || []);
+      setInscriptionsEnAttente(data || []);
     } catch (error) {
-      console.error('Erreur lors du chargement des inscriptions confirmées:', error);
-    }
-  };
-
-  const loadNotifications = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('notifications')
-        .select('*')
-        .eq('user_id', user?.id)
-        .eq('read', false)
-        .order('created_at', { ascending: false })
-        .limit(5);
-
-      if (error) throw error;
-      setNotifications(data || []);
-    } catch (error) {
-      console.error('Erreur lors du chargement des notifications:', error);
-    }
-  };
-
-  const markNotificationAsRead = async (notificationId: string) => {
-    try {
-      await supabase
-        .from('notifications')
-        .update({ read: true })
-        .eq('id', notificationId);
-      
-      setNotifications(prev => prev.filter(n => n.id !== notificationId));
-    } catch (error) {
-      console.error('Erreur lors du marquage de la notification:', error);
+      console.error('Erreur lors du chargement des inscriptions en attente:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
   if (loading) {
+    return <div className="flex items-center justify-center py-4"><Loader2 className="h-6 w-6 animate-spin" /></div>;
+  }
+
+  if (inscriptionsEnAttente.length === 0) {
     return (
-      <Layout title="Accueil">
-        <div className="flex items-center justify-center py-8">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
-            <p>Chargement...</p>
-          </div>
-        </div>
-      </Layout>
+      <div className="text-center py-4 text-muted-foreground">
+        <p>Aucune inscription en attente</p>
+      </div>
     );
   }
 
   return (
-    <Layout title="Accueil">
-      <div className="space-y-6">
-        {/* Notifications */}
-        {notifications.length > 0 && (
-          <Card className="gradient-card shadow-soft border-border/50">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <span className="text-xl">🔔</span>
-                Notifications
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                {notifications.map((notification) => (
-                  <div key={notification.id} className="flex items-start justify-between p-3 bg-muted/20 rounded-lg">
-                    <div className="flex-1">
-                      <h4 className="text-sm font-medium text-foreground">{notification.title}</h4>
-                      <p className="text-xs text-muted-foreground mt-1">{notification.message}</p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {format(new Date(notification.created_at), 'dd/MM/yyyy à HH:mm', { locale: fr })}
-                      </p>
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => markNotificationAsRead(notification.id)}
-                      className="text-xs"
-                    >
-                      Marquer comme lu
-                    </Button>
-                  </div>
-                ))}
+    <div className="space-y-3">
+      {inscriptionsEnAttente.map((inscription) => (
+        <div
+          key={inscription.id}
+          className="p-3 border rounded-lg bg-yellow-50 border-yellow-200"
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="font-medium text-foreground">
+                {inscription.creneaux?.type_activite?.nom}
               </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Actions principales */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <Card className="gradient-card shadow-soft border-border/50">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <span className="text-xl">📝</span>
-                Inscription aux créneaux
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground mb-4">
-                Inscrivez-vous aux créneaux d'activité disponibles selon vos disponibilités.
-              </p>
-              <Button 
-                onClick={() => navigate('/inscription')}
-                className="w-full"
-              >
-                S'inscrire à un créneau
-              </Button>
-            </CardContent>
-          </Card>
-
-          <Card className="gradient-card shadow-soft border-border/50">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <span className="text-xl">📊</span>
-                Rapport d'activité
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground mb-4">
-                Rédigez et soumettez vos rapports d'activité de terrain.
-              </p>
-              <Button 
-                onClick={() => navigate('/rapport')}
-                className="w-full"
-              >
-                Nouveau rapport
-              </Button>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Mes inscriptions confirmées */}
-        {confirmedInscriptions.length > 0 && (
-          <Card className="gradient-card shadow-soft border-border/50">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <span className="text-xl">✅</span>
-                Mes inscriptions confirmées
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {confirmedInscriptions.map((inscription) => (
-                  <div key={inscription.id} className="flex items-center justify-between p-3 bg-success/10 border border-success/20 rounded-lg">
-                    <div>
-                      <h4 className="font-medium text-foreground">
-                        {inscription.creneaux?.type_activite?.nom || 'Activité inconnue'}
-                      </h4>
-                      <p className="text-sm text-muted-foreground">
-                        {inscription.creneaux?.date_creneau ? 
-                          format(new Date(inscription.creneaux.date_creneau), 'EEEE dd MMMM yyyy', { locale: fr }) : 
-                          'Date inconnue'
-                        }
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {inscription.creneaux?.heure_debut} - {inscription.creneaux?.heure_fin}
-                      </p>
-                    </div>
-                    <Badge variant="outline" className="text-success border-success">
-                      Confirmée
-                    </Badge>
-                  </div>
-                ))}
+              <div className="text-sm text-muted-foreground">
+                {format(new Date(inscription.creneaux?.date_creneau), 'EEEE d MMMM yyyy', { locale: fr })}
+                {' • '}
+                {inscription.creneaux?.heure_debut} - {inscription.creneaux?.heure_fin}
               </div>
-              <Button 
-                variant="outline" 
-                className="w-full mt-4"
-                onClick={() => navigate('/inscription')}
-              >
-                Voir toutes mes inscriptions
-              </Button>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Statistiques */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatsCard
-            title="En attente"
-            value={pendingInscriptions.length}
-            icon={<span className="text-lg">⏳</span>}
-            color="warning"
-          />
-          <StatsCard
-            title="Confirmées"
-            value={confirmedInscriptions.length}
-            icon={<span className="text-lg">✅</span>}
-            color="success"
-          />
-          <StatsCard
-            title="Rapports"
-            value={userReports.length}
-            icon={<span className="text-lg">📊</span>}
-            color="primary"
-          />
-          <StatsCard
-            title="Notifications"
-            value={notifications.length}
-            icon={<span className="text-lg">🔔</span>}
-            color="secondary"
-          />
-        </div>
-
-        {/* Liens rapides */}
-        <Card className="gradient-card shadow-soft border-border/50">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <span className="text-xl">🔗</span>
-              Liens rapides
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <Button 
-                variant="outline" 
-                onClick={() => navigate('/planning')}
-                className="h-auto p-4 flex flex-col items-center gap-2"
-              >
-                <span className="text-2xl">📅</span>
-                <span>Planning mensuel</span>
-              </Button>
-              <Button 
-                variant="outline" 
-                onClick={() => navigate('/rapports-publics')}
-                className="h-auto p-4 flex flex-col items-center gap-2"
-              >
-                <span className="text-2xl">📊</span>
-                <span>Rapports publics</span>
-              </Button>
-              <Button 
-                variant="outline" 
-                onClick={() => navigate('/profil')}
-                className="h-auto p-4 flex flex-col items-center gap-2"
-              >
-                <span className="text-2xl">👤</span>
-                <span>Mon profil</span>
-              </Button>
-              {userProfile?.role === 'admin' && (
-                <Button 
-                  variant="outline" 
-                  onClick={() => navigate('/admin')}
-                  className="h-auto p-4 flex flex-col items-center gap-2"
-                >
-                  <span className="text-2xl">⚙️</span>
-                  <span>Administration</span>
-                </Button>
+              {inscription.notes && (
+                <div className="text-sm text-muted-foreground mt-1">
+                  Notes: {inscription.notes}
+                </div>
               )}
+            </div>
+            <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-300">
+              En attente
+            </Badge>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};
+
+const Home = () => {
+  const { user } = useAuth();
+  const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [stats, setStats] = useState({
+    totalRapports: 0,
+    conversationsTotal: 0,
+    videosTotal: 0,
+    publicationsTotal: 0,
+    inscriptionsEnAttente: 0
+  });
+
+  useEffect(() => {
+    calculateStats();
+  }, [selectedMonth]);
+
+  const calculateStats = () => {
+    const rapports = JSON.parse(localStorage.getItem('rapports') || '[]');
+    const inscriptions = JSON.parse(localStorage.getItem('inscriptions') || '[]');
+    
+    // Filtrer par mois sélectionné
+    const [year, month] = selectedMonth.split('-').map(Number);
+    
+    const rapportsMois = rapports.filter((r: any) => {
+      const rapportDate = new Date(r.date);
+      return rapportDate.getFullYear() === year && rapportDate.getMonth() === month - 1;
+    });
+    
+    const inscriptionsEnAttente = inscriptions.filter((i: any) => i.statut === 'en_attente').length;
+    
+    setStats({
+      totalRapports: rapportsMois.length,
+      conversationsTotal: rapportsMois.reduce((sum: number, r: any) => sum + parseInt(r.conversations || '0'), 0),
+      videosTotal: rapportsMois.reduce((sum: number, r: any) => sum + parseInt(r.videos || '0'), 0),
+      publicationsTotal: rapportsMois.reduce((sum: number, r: any) => 
+        sum + parseInt(r.revues || '0') + parseInt(r.brochures || '0') + parseInt(r.tracts || '0'), 0
+      ),
+      inscriptionsEnAttente
+    });
+  };
+
+  const generateMonthOptions = () => {
+    const options = [];
+    const currentDate = new Date();
+    
+    for (let i = -6; i <= 6; i++) {
+      const date = new Date(currentDate.getFullYear(), currentDate.getMonth() + i, 1);
+      const value = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+      const label = date.toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' });
+      options.push({ value, label });
+    }
+    
+    return options;
+  };
+
+  return (
+    <Layout title="Tableau de bord">
+      {/* Section de bienvenue */}
+      <div className="mb-6">
+        <Card className="gradient-card shadow-soft border-border/50">
+          <CardContent className="p-6">
+            <div className="text-center">
+              <h2 className="text-xl font-semibold text-foreground mb-2">
+                Bienvenue dans l'application de gestion
+              </h2>
+              <p className="text-muted-foreground">
+                Gérez efficacement vos activités de diffusion sur le marché local
+              </p>
             </div>
           </CardContent>
         </Card>
       </div>
+
+      {/* Accordéon Statistiques */}
+      <Accordion type="single" collapsible className="mb-6">
+        <AccordionItem value="stats" className="border rounded-lg gradient-card shadow-soft border-border/50">
+          <AccordionTrigger className="px-4 py-3 hover:no-underline">
+            <div className="flex items-center gap-3">
+              <span className="text-lg">📊</span>
+              <span className="font-medium">Voir les chiffres du mois</span>
+            </div>
+          </AccordionTrigger>
+          <AccordionContent className="px-4 pb-4">
+            <div className="flex items-center gap-4 mb-4">
+              <span className="text-sm font-medium">Statistiques pour:</span>
+              <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                <SelectTrigger className="w-48">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {generateMonthOptions().map(option => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <StatsCard
+                title="Rapports ce mois"
+                value={stats.totalRapports}
+                icon={<span className="text-lg">📊</span>}
+                color="primary"
+                trend={`${new Date(selectedMonth + '-01').toLocaleDateString('fr-FR', { month: 'long' })}`}
+              />
+              <StatsCard
+                title="Conversations"
+                value={stats.conversationsTotal}
+                icon={<span className="text-lg">💬</span>}
+                color="secondary"
+                trend={`${new Date(selectedMonth + '-01').toLocaleDateString('fr-FR', { month: 'long' })}`}
+              />
+              <StatsCard
+                title="Vidéos montrées"
+                value={stats.videosTotal}
+                icon={<span className="text-lg">🎥</span>}
+                color="accent"
+                trend={`${new Date(selectedMonth + '-01').toLocaleDateString('fr-FR', { month: 'long' })}`}
+              />
+              <StatsCard
+                title="Publications"
+                value={stats.publicationsTotal}
+                icon={<span className="text-lg">📚</span>}
+                color="success"
+                trend="Distribuées"
+              />
+            </div>
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
+
+      {/* Layout en 2 colonnes */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        {/* Planning mensuel */}
+        <div>
+          <PlanningMensuel selectedMonth={selectedMonth} onMonthChange={setSelectedMonth} />
+        </div>
+
+        {/* Actions rapides */}
+        <div className="space-y-4">
+          {/* Mes inscriptions en attente */}
+          {user && (
+            <Card className="gradient-card shadow-soft border-border/50 border-l-4 border-l-warning">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-foreground">
+                  <span className="text-xl">⏳</span>
+                  Mes inscriptions en attente
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <MesInscriptionsEnAttente />
+              </CardContent>
+            </Card>
+          )}
+
+          <Card className="gradient-card shadow-soft border-border/50 hover:shadow-medium transition-all duration-300">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-foreground">
+                <span className="text-xl">📅</span>
+                Inscription créneaux
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-muted-foreground mb-4">
+                Inscrivez-vous aux créneaux de diffusion disponibles
+              </p>
+              <Link to="/inscription">
+                <Button variant="secondary" className="w-full">
+                  S'inscrire
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
+
+          <Card className="gradient-card shadow-soft border-border/50 hover:shadow-medium transition-all duration-300">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-foreground">
+                <span className="text-xl">📝</span>
+                Nouveau rapport
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-muted-foreground mb-4">
+                Saisissez un nouveau rapport d'activité de diffusion
+              </p>
+              <Link to="/rapport">
+                <Button className="w-full">
+                  Créer un rapport
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
+      {/* Alertes et notifications */}
+      {stats.inscriptionsEnAttente > 0 && (
+        <Card className="gradient-card shadow-soft border-border/50 border-l-4 border-l-warning">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">⚠️</span>
+              <div>
+                <h3 className="font-semibold text-foreground">
+                  Inscriptions en attente
+                </h3>
+                <p className="text-muted-foreground">
+                  {stats.inscriptionsEnAttente} inscription(s) en attente de validation
+                </p>
+              </div>
+              <Link to="/admin" className="ml-auto">
+                <Button size="sm" variant="outline">
+                  Voir
+                </Button>
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </Layout>
   );
 };
