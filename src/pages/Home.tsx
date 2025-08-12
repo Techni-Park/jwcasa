@@ -14,6 +14,118 @@ import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
+const MesInscriptionsConfirmees = () => {
+  const { user } = useAuth();
+  const [inscriptionsConfirmees, setInscriptionsConfirmees] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [proclamateurData, setProclamateurData] = useState<any>(null);
+
+  useEffect(() => {
+    if (user) {
+      loadProclamateurData();
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (proclamateurData) {
+      loadInscriptionsConfirmees();
+    }
+  }, [proclamateurData]);
+
+  const loadProclamateurData = async () => {
+    try {
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('user_id', user?.id)
+        .single();
+
+      if (profiles) {
+        const { data: proclamateurs } = await supabase
+          .from('proclamateurs')
+          .select('*')
+          .eq('profile_id', profiles.id)
+          .single();
+
+        setProclamateurData(proclamateurs);
+      }
+    } catch (error) {
+      console.error('Erreur lors du chargement des données proclamateur:', error);
+    }
+  };
+
+  const loadInscriptionsConfirmees = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('inscriptions')
+        .select(`
+          *,
+          creneaux(
+            date_creneau,
+            heure_debut,
+            heure_fin,
+            type_activite(nom)
+          )
+        `)
+        .eq('proclamateur_id', proclamateurData.id)
+        .eq('confirme', true)
+        .gte('creneaux.date_creneau', new Date().toISOString().split('T')[0])
+        .order('creneaux.date_creneau', { ascending: true });
+
+      if (error) throw error;
+      setInscriptionsConfirmees(data || []);
+    } catch (error) {
+      console.error('Erreur lors du chargement des inscriptions confirmées:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return <div className="flex items-center justify-center py-4"><Loader2 className="h-6 w-6 animate-spin" /></div>;
+  }
+
+  if (inscriptionsConfirmees.length === 0) {
+    return (
+      <div className="text-center py-4 text-muted-foreground">
+        <p>Aucune inscription confirmée à venir</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {inscriptionsConfirmees.map((inscription) => (
+        <div
+          key={inscription.id}
+          className="p-3 border rounded-lg bg-green-50 border-green-200"
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="font-medium text-foreground">
+                {inscription.creneaux?.type_activite?.nom}
+              </div>
+              <div className="text-sm text-muted-foreground">
+                {format(new Date(inscription.creneaux?.date_creneau), 'EEEE d MMMM yyyy', { locale: fr })}
+                {' • '}
+                {inscription.creneaux?.heure_debut} - {inscription.creneaux?.heure_fin}
+              </div>
+              {inscription.notes && (
+                <div className="text-sm text-muted-foreground mt-1">
+                  Notes: {inscription.notes}
+                </div>
+              )}
+            </div>
+            <Badge variant="outline" className="bg-green-100 text-green-800 border-green-300">
+              Confirmée
+            </Badge>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};
+
 const MesInscriptionsEnAttente = () => {
   const { user } = useAuth();
   const [inscriptionsEnAttente, setInscriptionsEnAttente] = useState<any[]>([]);
@@ -257,15 +369,30 @@ const Home = () => {
         </AccordionItem>
       </Accordion>
 
-      {/* Layout en 2 colonnes */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        {/* Planning mensuel */}
-        <div>
+      {/* Layout principal */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+        {/* Planning mensuel - 2 colonnes */}
+        <div className="lg:col-span-2">
           <PlanningMensuel selectedMonth={selectedMonth} onMonthChange={setSelectedMonth} />
         </div>
 
-        {/* Actions rapides */}
+        {/* Colonne droite - Inscriptions et actions rapides */}
         <div className="space-y-4">
+          {/* Mes inscriptions confirmées */}
+          {user && (
+            <Card className="gradient-card shadow-soft border-border/50 border-l-4 border-l-success">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-foreground">
+                  <span className="text-xl">✅</span>
+                  Mes inscriptions confirmées
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <MesInscriptionsConfirmees />
+              </CardContent>
+            </Card>
+          )}
+
           {/* Mes inscriptions en attente */}
           {user && (
             <Card className="gradient-card shadow-soft border-border/50 border-l-4 border-l-warning">
@@ -281,39 +408,25 @@ const Home = () => {
             </Card>
           )}
 
-          <Card className="gradient-card shadow-soft border-border/50 hover:shadow-medium transition-all duration-300">
+          {/* Actions rapides */}
+          <Card className="gradient-card shadow-soft border-border/50">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-foreground">
-                <span className="text-xl">📅</span>
-                Inscription créneaux
+                <span className="text-xl">🚀</span>
+                Actions rapides
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground mb-4">
-                Inscrivez-vous aux créneaux de diffusion disponibles
-              </p>
+            <CardContent className="space-y-3">
               <Link to="/inscription">
-                <Button variant="secondary" className="w-full">
-                  S'inscrire
+                <Button variant="secondary" className="w-full justify-start">
+                  <span className="text-lg mr-2">📅</span>
+                  Inscription créneaux
                 </Button>
               </Link>
-            </CardContent>
-          </Card>
-
-          <Card className="gradient-card shadow-soft border-border/50 hover:shadow-medium transition-all duration-300">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-foreground">
-                <span className="text-xl">📝</span>
-                Nouveau rapport
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-muted-foreground mb-4">
-                Saisissez un nouveau rapport d'activité de diffusion
-              </p>
               <Link to="/rapport">
-                <Button className="w-full">
-                  Créer un rapport
+                <Button className="w-full justify-start">
+                  <span className="text-lg mr-2">📝</span>
+                  Nouveau rapport
                 </Button>
               </Link>
             </CardContent>
