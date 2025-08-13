@@ -226,7 +226,7 @@ const Parametrage = () => {
                         <SelectContent>
                           <SelectItem value="none">Aucun valideur</SelectItem>
                           {profiles.map((profile) => (
-                            <SelectItem key={profile.id} value={profile.id}>
+                            <SelectItem key={profile.id} value={profile.id || `profile-${profile.nom}`}>
                               {profile.prenom} {profile.nom} ({profile.role})
                             </SelectItem>
                           ))}
