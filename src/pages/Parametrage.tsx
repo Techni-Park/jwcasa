@@ -214,9 +214,9 @@ const Parametrage = () => {
                         </Badge>
                       )}
                       <Select
-                        value={type.valideur_id || ""}
+                        value={type.valideur_id || "none"}
                         onValueChange={(value) => {
-                          const updatedType = { ...type, valideur_id: value || null };
+                          const updatedType = { ...type, valideur_id: value === "none" ? null : value };
                           saveTypeActivite(updatedType);
                         }}
                       >
@@ -224,7 +224,7 @@ const Parametrage = () => {
                           <SelectValue placeholder="Sélectionner un valideur" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="">Aucun valideur</SelectItem>
+                          <SelectItem value="none">Aucun valideur</SelectItem>
                           {profiles.map((profile) => (
                             <SelectItem key={profile.id} value={profile.id}>
                               {profile.prenom} {profile.nom} ({profile.role})
