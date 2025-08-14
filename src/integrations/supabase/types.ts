@@ -412,6 +412,7 @@ export type Database = {
           recurrence_days: number[] | null
           recurrence_enabled: boolean | null
           recurrence_weeks: number[] | null
+          updated_at: string
           valideur_id: string | null
         }
         Insert: {
@@ -427,6 +428,7 @@ export type Database = {
           recurrence_days?: number[] | null
           recurrence_enabled?: boolean | null
           recurrence_weeks?: number[] | null
+          updated_at?: string
           valideur_id?: string | null
         }
         Update: {
@@ -442,6 +444,7 @@ export type Database = {
           recurrence_days?: number[] | null
           recurrence_enabled?: boolean | null
           recurrence_weeks?: number[] | null
+          updated_at?: string
           valideur_id?: string | null
         }
         Relationships: [
