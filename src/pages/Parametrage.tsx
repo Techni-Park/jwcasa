@@ -11,7 +11,8 @@ import Layout from "@/components/Layout";
 import { useAuth } from "@/contexts/AuthContext";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Settings, Clock, UserCheck } from "lucide-react";
+import { Settings, Clock, UserCheck, CalendarDays } from "lucide-react";
+import CreneauxGestion from "@/components/CreneauxGestion";
 
 interface TypeActivite {
   id: string;
@@ -182,7 +183,7 @@ const Parametrage = () => {
         </div>
 
         <Tabs defaultValue="valideurs" className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="valideurs" className="flex items-center gap-2">
               <UserCheck className="h-4 w-4" />
               Valideurs
@@ -190,6 +191,10 @@ const Parametrage = () => {
             <TabsTrigger value="recurrence" className="flex items-center gap-2">
               <Clock className="h-4 w-4" />
               Créneaux récurrents
+            </TabsTrigger>
+            <TabsTrigger value="creneaux" className="flex items-center gap-2">
+              <CalendarDays className="h-4 w-4" />
+              Gestion créneaux
             </TabsTrigger>
           </TabsList>
 
@@ -388,6 +393,10 @@ const Parametrage = () => {
                 </Card>
               )}
             </div>
+          </TabsContent>
+
+          <TabsContent value="creneaux" className="space-y-4">
+            <CreneauxGestion />
           </TabsContent>
         </Tabs>
       </div>

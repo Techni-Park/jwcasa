@@ -14,15 +14,48 @@ export type Database = {
   }
   public: {
     Tables: {
+      affiches: {
+        Row: {
+          actif: boolean | null
+          created_at: string
+          description: string | null
+          id: string
+          nom: string
+          updated_at: string
+          url_image: string | null
+        }
+        Insert: {
+          actif?: boolean | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          nom: string
+          updated_at?: string
+          url_image?: string | null
+        }
+        Update: {
+          actif?: boolean | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          nom?: string
+          updated_at?: string
+          url_image?: string | null
+        }
+        Relationships: []
+      }
       creneaux: {
         Row: {
           actif: boolean | null
+          affiche_id: string | null
           created_at: string
           date_creneau: string
           heure_debut: string
           heure_fin: string
           id: string
           max_participants: number | null
+          min_participants: number | null
+          nombre_presentoirs_recommandes: number | null
           notes: string | null
           responsable_id: string | null
           type_activite_id: string
@@ -30,12 +63,15 @@ export type Database = {
         }
         Insert: {
           actif?: boolean | null
+          affiche_id?: string | null
           created_at?: string
           date_creneau: string
           heure_debut: string
           heure_fin: string
           id?: string
           max_participants?: number | null
+          min_participants?: number | null
+          nombre_presentoirs_recommandes?: number | null
           notes?: string | null
           responsable_id?: string | null
           type_activite_id: string
@@ -43,18 +79,28 @@ export type Database = {
         }
         Update: {
           actif?: boolean | null
+          affiche_id?: string | null
           created_at?: string
           date_creneau?: string
           heure_debut?: string
           heure_fin?: string
           id?: string
           max_participants?: number | null
+          min_participants?: number | null
+          nombre_presentoirs_recommandes?: number | null
           notes?: string | null
           responsable_id?: string | null
           type_activite_id?: string
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "creneaux_affiche_id_fkey"
+            columns: ["affiche_id"]
+            isOneToOne: false
+            referencedRelation: "affiches"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "creneaux_responsable_id_fkey"
             columns: ["responsable_id"]
