@@ -221,24 +221,21 @@ const Parametrage = () => {
                           {type.valideur.prenom} {type.valideur.nom}
                         </Badge>
                       )}
-                      <Select
-                        value={type.valideur_id || "none"}
-                        onValueChange={(value) => {
+                      <Select value={type.valideur_id || "none"} onValueChange={(value) => {
                           const updatedType = { ...type, valideur_id: value === "none" ? null : value };
                           saveTypeActivite(updatedType);
-                        }}
-                      >
-                        <SelectTrigger className="w-48">
-                          <SelectValue placeholder="Sélectionner un valideur" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="none">Aucun valideur</SelectItem>
-                          {profiles.map((profile) => (
-                            <SelectItem key={profile.id} value={profile.id || `profile-${profile.nom}`}>
-                              {profile.prenom} {profile.nom} ({profile.role})
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
+                      }}>
+                          <SelectTrigger className="w-48">
+                              <SelectValue placeholder="Sélectionner un valideur" />
+                          </SelectTrigger>
+                          <SelectContent>
+                              <SelectItem value="none">Aucun valideur</SelectItem>
+                              {profiles.map((profile) => (
+                                  <SelectItem key={profile.id} value={profile.id}>
+                                      {profile.prenom} {profile.nom} ({profile.role})
+                                  </SelectItem>
+                              ))}
+                          </SelectContent>
                       </Select>
                     </div>
                   </div>
