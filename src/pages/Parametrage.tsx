@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Settings, Clock, UserCheck, CalendarDays } from "lucide-react";
 import CreneauxGestion from "@/components/CreneauxGestion";
+import { useCallback } from "react";
 
 interface TypeActivite {
   id: string;
@@ -63,11 +64,9 @@ const Parametrage = () => {
   const [loading, setLoading] = useState(true);
   const [selectedType, setSelectedType] = useState<TypeActivite | null>(null);
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+ 
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     try {
       setLoading(true);
 
@@ -103,7 +102,11 @@ const Parametrage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [toast, setLoading]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   const saveTypeActivite = async (typeActivite: TypeActivite) => {
     try {
