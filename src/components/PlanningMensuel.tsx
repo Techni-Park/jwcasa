@@ -512,8 +512,8 @@ const PlanningMensuel = ({ selectedMonth, onMonthChange }: PlanningMensuelProps)
   const dayRanges = getDayRanges();
   const creneauxGroups = getCreneauxByTypeAndTime();
 
-  const shouldShowWeekView = isMobile || viewMode === 'week' || selectedWeek;
-  const showDayView = selectedWeek && viewMode === 'week';
+  const shouldShowWeekView = isMobile || viewMode === 'week' || (selectedWeek && selectedWeek !== '');
+  const showDayView = selectedWeek && selectedWeek !== '' && viewMode === 'week';
 
   const getCreneauForDay = (dayDate: string, creneau: Creneau) => {
     return creneau.date_creneau === dayDate;
@@ -569,15 +569,20 @@ const PlanningMensuel = ({ selectedMonth, onMonthChange }: PlanningMensuelProps)
           {/* Sélecteur de semaine */}
           <div className="flex flex-wrap gap-4">
             <div className="min-w-0 flex-1">
-              <Select value={selectedWeek} onValueChange={(value) => {
-                setSelectedWeek(value);
-                setViewMode(value ? 'week' : 'month');
+              <Select value={selectedWeek || "all-weeks"} onValueChange={(value) => {
+                if (value === "all-weeks") {
+                  setSelectedWeek('');
+                  setViewMode('month');
+                } else {
+                  setSelectedWeek(value);
+                  setViewMode('week');
+                }
               }}>
                 <SelectTrigger>
                   <SelectValue placeholder="Vue mensuelle (toutes les semaines)" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Vue mensuelle (toutes les semaines)</SelectItem>
+                  <SelectItem value="all-weeks">Vue mensuelle (toutes les semaines)</SelectItem>
                   {weekOptions.map(week => (
                     <SelectItem key={week.value} value={week.value}>
                       {week.label}
@@ -602,7 +607,7 @@ const PlanningMensuel = ({ selectedMonth, onMonthChange }: PlanningMensuelProps)
                   variant={viewMode === 'week' ? 'default' : 'outline'}
                   size="sm"
                   onClick={() => setViewMode('week')}
-                  disabled={!selectedWeek}
+                  disabled={!selectedWeek || selectedWeek === ''}
                 >
                   Vue semaine
                 </Button>
