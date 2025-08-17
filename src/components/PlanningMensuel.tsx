@@ -49,15 +49,17 @@ const PlanningMensuel = ({ selectedMonth, onMonthChange }: PlanningMensuelProps)
   const [inscriptions, setInscriptions] = useState<Inscription[]>([]);
   const [proclamateurData, setProclamateurData] = useState<Proclamateur | null>(null);
   const [typesActivite, setTypesActivite] = useState<TypeActivite[]>([]);
+  const [selectedActivity, setSelectedActivity] = useState<string>('all');
   const [currentMonth, setCurrentMonth] = useState(selectedMonth);
   const [loading, setLoading] = useState(true);
   
   // États pour le modal
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedCellData, setSelectedCellData] = useState<{
-    date: string;
+    weekStart: Date;
+    weekEnd: Date;
     activite: TypeActivite;
-    creneauDetaille?: CreneauDetaille;
+    creneauxSemaine: CreneauDetaille[];
   } | null>(null);
 
   useEffect(() => {
@@ -69,7 +71,7 @@ const PlanningMensuel = ({ selectedMonth, onMonthChange }: PlanningMensuelProps)
   useEffect(() => {
     loadTypesActivite();
     loadCreneaux();
-  }, [currentMonth]);
+  }, [currentMonth, selectedActivity]);
 
   useEffect(() => {
     setCurrentMonth(selectedMonth);
@@ -153,7 +155,7 @@ const PlanningMensuel = ({ selectedMonth, onMonthChange }: PlanningMensuelProps)
       const monthStart = startOfMonth(new Date(currentMonth + '-01'));
       const monthEnd = endOfMonth(monthStart);
 
-      const { data, error } = await supabase
+      let query = supabase
         .from('creneaux')
         .select(`
           *,
@@ -161,7 +163,13 @@ const PlanningMensuel = ({ selectedMonth, onMonthChange }: PlanningMensuelProps)
         `)
         .gte('date_creneau', format(monthStart, 'yyyy-MM-dd'))
         .lte('date_creneau', format(monthEnd, 'yyyy-MM-dd'))
-        .eq('actif', true)
+        .eq('actif', true);
+
+      if (selectedActivity && selectedActivity !== 'all') {
+        query = query.eq('type_activite_id', selectedActivity);
+      }
+
+      const { data, error } = await query
         .order('date_creneau')
         .order('heure_debut');
 
@@ -190,7 +198,7 @@ const PlanningMensuel = ({ selectedMonth, onMonthChange }: PlanningMensuelProps)
   };
 
   // Nouvelles fonctions pour la vue tableau
-  const getWeekDates = () => {
+  const getWeekRanges = () => {
     const monthStart = startOfMonth(new Date(currentMonth + '-01'));
     const monthEnd = endOfMonth(monthStart);
     const weeks = eachWeekOfInterval(
@@ -198,29 +206,67 @@ const PlanningMensuel = ({ selectedMonth, onMonthChange }: PlanningMensuelProps)
       { weekStartsOn: 1 }
     );
 
-    return weeks.map(weekStart => ({
-      weekStart,
-      dates: Array.from({ length: 7 }, (_, i) => addDays(weekStart, i))
-        .filter(date => date <= monthEnd && date >= monthStart)
-    }));
+    return weeks.map(weekStart => {
+      const weekEnd = addDays(weekStart, 6);
+      return {
+        weekStart,
+        weekEnd: weekEnd > monthEnd ? monthEnd : weekEnd
+      };
+    });
   };
 
-  const getCreneauForDateAndActivity = (date: Date, typeActiviteId: string) => {
-    const dateString = format(date, 'yyyy-MM-dd');
-    return creneaux.find(c => 
-      c.date_creneau === dateString && 
+  const getCreneauxForWeekAndActivity = (weekStart: Date, weekEnd: Date, typeActiviteId: string) => {
+    const weekStartStr = format(weekStart, 'yyyy-MM-dd');
+    const weekEndStr = format(weekEnd, 'yyyy-MM-dd');
+    
+    return creneaux.filter(c => 
+      c.date_creneau >= weekStartStr && 
+      c.date_creneau <= weekEndStr &&
       c.type_activite_id === typeActiviteId
     );
   };
 
-  const handleCellClick = async (date: Date, activite: TypeActivite) => {
-    const dateString = format(date, 'yyyy-MM-dd');
-    const creneauDetaille = await loadCreneauDetails(dateString, activite.id);
+  const loadCreneauxSemaineDetails = async (weekStart: Date, weekEnd: Date, typeActiviteId: string): Promise<CreneauDetaille[]> => {
+    try {
+      const weekStartStr = format(weekStart, 'yyyy-MM-dd');
+      const weekEndStr = format(weekEnd, 'yyyy-MM-dd');
+
+      const { data, error } = await supabase
+        .from('creneaux')
+        .select(`
+          *,
+          type_activite(nom),
+          inscriptions(
+            *,
+            proclamateurs(
+              *,
+              profiles(nom, prenom)
+            )
+          )
+        `)
+        .gte('date_creneau', weekStartStr)
+        .lte('date_creneau', weekEndStr)
+        .eq('type_activite_id', typeActiviteId)
+        .eq('actif', true)
+        .order('date_creneau')
+        .order('heure_debut');
+
+      if (error) throw error;
+      return (data || []) as CreneauDetaille[];
+    } catch (error) {
+      console.error('Erreur lors du chargement des détails de la semaine:', error);
+      return [];
+    }
+  };
+
+  const handleCellClick = async (weekStart: Date, weekEnd: Date, activite: TypeActivite) => {
+    const creneauxSemaine = await loadCreneauxSemaineDetails(weekStart, weekEnd, activite.id);
     
     setSelectedCellData({
-      date: dateString,
+      weekStart,
+      weekEnd,
       activite,
-      creneauDetaille
+      creneauxSemaine
     });
     setModalOpen(true);
   };
@@ -244,10 +290,10 @@ const PlanningMensuel = ({ selectedMonth, onMonthChange }: PlanningMensuelProps)
 
       // Recharger les détails
       if (selectedCellData) {
-        const updatedDetails = await loadCreneauDetails(selectedCellData.date, selectedCellData.activite.id);
+        const updatedDetails = await loadCreneauxSemaineDetails(selectedCellData.weekStart, selectedCellData.weekEnd, selectedCellData.activite.id);
         setSelectedCellData({
           ...selectedCellData,
-          creneauDetaille: updatedDetails
+          creneauxSemaine: updatedDetails
         });
       }
 
@@ -280,7 +326,8 @@ const PlanningMensuel = ({ selectedMonth, onMonthChange }: PlanningMensuelProps)
     );
   }
 
-  const weekDates = getWeekDates();
+  const weekRanges = getWeekRanges();
+  const activitesToShow = selectedActivity === 'all' ? typesActivite : typesActivite.filter(a => a.id === selectedActivity);
 
   return (
     <Card className="gradient-card shadow-soft border-border/50">
@@ -290,23 +337,40 @@ const PlanningMensuel = ({ selectedMonth, onMonthChange }: PlanningMensuelProps)
         </CardTitle>
       </CardHeader>
       <CardContent>
-        {/* Sélecteur de mois */}
-        <div className="mb-6">
-          <Select value={currentMonth} onValueChange={(value) => {
-            setCurrentMonth(value);
-            onMonthChange?.(value);
-          }}>
-            <SelectTrigger className="w-48">
-              <SelectValue placeholder="Sélectionner un mois" />
-            </SelectTrigger>
-            <SelectContent>
-              {getMonthOptions().map(month => (
-                <SelectItem key={month.value} value={month.value}>
-                  {month.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+        {/* Sélecteurs */}
+        <div className="flex flex-wrap gap-4 mb-6">
+          <div className="min-w-0 flex-1">
+            <Select value={currentMonth} onValueChange={(value) => {
+              setCurrentMonth(value);
+              onMonthChange?.(value);
+            }}>
+              <SelectTrigger>
+                <SelectValue placeholder="Sélectionner un mois" />
+              </SelectTrigger>
+              <SelectContent>
+                {getMonthOptions().map(month => (
+                  <SelectItem key={month.value} value={month.value}>
+                    {month.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="min-w-0 flex-1">
+            <Select value={selectedActivity} onValueChange={setSelectedActivity}>
+              <SelectTrigger>
+                <SelectValue placeholder="Toutes les activités" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Toutes les activités</SelectItem>
+                {typesActivite.map(type => (
+                  <SelectItem key={type.id} value={type.id}>
+                    {type.nom}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         {/* Tableau planning - activités en lignes, semaines en colonnes */}
@@ -315,53 +379,56 @@ const PlanningMensuel = ({ selectedMonth, onMonthChange }: PlanningMensuelProps)
             <thead>
               <tr>
                 <th className="border border-border p-2 text-left font-medium">Activité</th>
-                {weekDates.map((week, weekIndex) => (
-                  <th key={weekIndex} className="border border-border p-2 text-center font-medium">
-                    Semaine {weekIndex + 1}
+                {weekRanges.map((week, weekIndex) => (
+                  <th key={weekIndex} className="border border-border p-2 text-center font-medium min-w-[150px]">
+                    <div className="text-sm">Semaine {weekIndex + 1}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {format(week.weekStart, 'd')} - {format(week.weekEnd, 'd MMM', { locale: fr })}
+                    </div>
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {typesActivite.map((activite) => (
+              {activitesToShow.map((activite) => (
                 <tr key={activite.id}>
                   <td className="border border-border p-2 font-medium bg-muted/50">
                     {activite.nom}
                   </td>
-                  {weekDates.map((week, weekIndex) => (
-                    <td key={weekIndex} className="border border-border p-1">
-                      <div className="grid grid-cols-7 gap-1">
-                        {week.dates.map((date) => {
-                          const creneau = getCreneauForDateAndActivity(date, activite.id);
-                          const isToday_ = isToday(date);
-                          
-                          return (
-                            <button
-                              key={date.toISOString()}
-                              onClick={() => handleCellClick(date, activite)}
-                              className={`
-                                min-h-[40px] p-1 text-xs rounded transition-colors
-                                ${isToday_ ? 'ring-2 ring-primary' : ''}
-                                ${creneau 
-                                  ? 'bg-blue-100 hover:bg-blue-200 border border-blue-300' 
-                                  : 'bg-gray-50 hover:bg-gray-100 border border-gray-200'
-                                }
-                              `}
-                            >
-                              <div className="font-medium">
-                                {format(date, 'd')}
-                              </div>
-                              {creneau && (
-                                <div className="text-[10px] text-blue-700">
-                                  {formatTime(creneau.heure_debut)}
+                  {weekRanges.map((week, weekIndex) => {
+                    const creneauxSemaine = getCreneauxForWeekAndActivity(week.weekStart, week.weekEnd, activite.id);
+                    
+                    return (
+                      <td key={weekIndex} className="border border-border p-2">
+                        <button
+                          onClick={() => handleCellClick(week.weekStart, week.weekEnd, activite)}
+                          className="w-full min-h-[80px] p-2 text-left rounded transition-colors hover:bg-muted/50 border border-dashed border-muted-foreground/30"
+                        >
+                          {creneauxSemaine.length > 0 ? (
+                            <div className="space-y-1">
+                              {creneauxSemaine.slice(0, 3).map((creneau) => (
+                                <div key={creneau.id} className="flex items-center gap-1 text-xs">
+                                  <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0" />
+                                  <span className="truncate">
+                                    {format(new Date(creneau.date_creneau), 'dd/MM')} {formatTime(creneau.heure_debut)}
+                                  </span>
+                                </div>
+                              ))}
+                              {creneauxSemaine.length > 3 && (
+                                <div className="text-xs text-muted-foreground">
+                                  +{creneauxSemaine.length - 3} autres...
                                 </div>
                               )}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </td>
-                  ))}
+                            </div>
+                          ) : (
+                            <div className="text-xs text-muted-foreground text-center">
+                              Aucun créneau
+                            </div>
+                          )}
+                        </button>
+                      </td>
+                    );
+                  })}
                 </tr>
               ))}
             </tbody>
@@ -370,32 +437,36 @@ const PlanningMensuel = ({ selectedMonth, onMonthChange }: PlanningMensuelProps)
 
         {/* Modal des détails */}
         <Dialog open={modalOpen} onOpenChange={setModalOpen}>
-          <DialogContent className="max-w-md">
+          <DialogContent className="max-w-lg">
             <DialogHeader>
               <DialogTitle>
-                {selectedCellData?.activite.nom} - {selectedCellData && format(new Date(selectedCellData.date), 'EEEE d MMMM yyyy', { locale: fr })}
+                {selectedCellData?.activite.nom} - Semaine du {selectedCellData && format(selectedCellData.weekStart, 'd')} au {selectedCellData && format(selectedCellData.weekEnd, 'd MMMM yyyy', { locale: fr })}
               </DialogTitle>
             </DialogHeader>
             
             {selectedCellData && (
               <div className="space-y-4">
-                {selectedCellData.creneauDetaille ? (
-                  <>
-                    <div>
-                      <h4 className="font-medium mb-2">Horaire</h4>
-                      <p className="text-sm text-muted-foreground">
-                        {formatTime(selectedCellData.creneauDetaille.heure_debut)} - {formatTime(selectedCellData.creneauDetaille.heure_fin)}
-                      </p>
-                    </div>
+                {selectedCellData.creneauxSemaine.length > 0 ? (
+                  selectedCellData.creneauxSemaine.map((creneau) => (
+                    <div key={creneau.id} className="border rounded-lg p-3">
+                      <div className="flex items-center justify-between mb-2">
+                        <div>
+                          <h4 className="font-medium">
+                            {format(new Date(creneau.date_creneau), 'EEEE d MMMM', { locale: fr })}
+                          </h4>
+                          <p className="text-sm text-muted-foreground">
+                            {formatTime(creneau.heure_debut)} - {formatTime(creneau.heure_fin)}
+                          </p>
+                        </div>
+                        <Badge variant="outline">
+                          {creneau.inscriptions.length}/{creneau.max_participants} inscrits
+                        </Badge>
+                      </div>
 
-                    <div>
-                      <h4 className="font-medium mb-2">
-                        Inscrits ({selectedCellData.creneauDetaille.inscriptions.length}/{selectedCellData.creneauDetaille.max_participants})
-                      </h4>
-                      <div className="space-y-2">
-                        {selectedCellData.creneauDetaille.inscriptions.length > 0 ? (
-                          selectedCellData.creneauDetaille.inscriptions.map((inscription) => (
-                            <div key={inscription.id} className="flex items-center justify-between p-2 border rounded">
+                      {creneau.inscriptions.length > 0 && (
+                        <div className="space-y-2">
+                          {creneau.inscriptions.map((inscription) => (
+                            <div key={inscription.id} className="flex items-center justify-between p-2 bg-muted/50 rounded">
                               <div className="flex items-center gap-2">
                                 <div className={`w-2 h-2 rounded-full ${
                                   inscription.confirme ? 'bg-green-500' : 'bg-yellow-500'
@@ -418,16 +489,14 @@ const PlanningMensuel = ({ selectedMonth, onMonthChange }: PlanningMensuelProps)
                                 </Button>
                               )}
                             </div>
-                          ))
-                        ) : (
-                          <p className="text-sm text-muted-foreground">Aucune inscription</p>
-                        )}
-                      </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                  </>
+                  ))
                 ) : (
-                  <p className="text-sm text-muted-foreground">
-                    Aucun créneau programmé pour cette date et cette activité.
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    Aucun créneau programmé pour cette semaine et cette activité.
                   </p>
                 )}
               </div>
