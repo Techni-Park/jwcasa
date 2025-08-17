@@ -112,6 +112,92 @@ const MesInscriptions = ({ proclamateurId }: { proclamateurId: string }) => {
   );
 };
 
+const MesInscriptionsConfirmees = ({ proclamateurId }: { proclamateurId: string }) => {
+  const [inscriptionsConfirmees, setInscriptionsConfirmees] = useState<InscriptionAvecCreneau[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    loadInscriptionsConfirmees();
+  }, [proclamateurId]);
+
+  const loadInscriptionsConfirmees = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('inscriptions')
+        .select(`
+          *,
+          creneaux(
+            date_creneau,
+            heure_debut,
+            heure_fin,
+            type_activite(nom)
+          )
+        `)
+        .eq('proclamateur_id', proclamateurId)
+        .eq('confirme', true)
+        .order('date_inscription', { ascending: false });
+
+      if (error) throw error;
+      
+      // Filtrer les inscriptions pour les créneaux futurs côté client
+      const today = new Date().toISOString().split('T')[0];
+      const inscriptionsFutures = (data || []).filter(inscription => 
+        inscription.creneaux && inscription.creneaux.date_creneau >= today
+      );
+      
+      setInscriptionsConfirmees(inscriptionsFutures);
+    } catch (error) {
+      console.error('Erreur lors du chargement des inscriptions confirmées:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return <div className="flex items-center justify-center py-4"><Loader2 className="h-6 w-6 animate-spin" /></div>;
+  }
+
+  if (inscriptionsConfirmees.length === 0) {
+    return (
+      <div className="text-center py-4 text-muted-foreground">
+        <p>Aucune inscription confirmée à venir</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {inscriptionsConfirmees.map((inscription) => (
+        <div
+          key={inscription.id}
+          className="p-3 border rounded-lg bg-green-50 border-green-200"
+        >
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="font-medium text-foreground">
+                {inscription.creneaux?.type_activite?.nom}
+              </div>
+              <div className="text-sm text-muted-foreground">
+                {format(new Date(inscription.creneaux?.date_creneau), 'EEEE d MMMM yyyy', { locale: fr })}
+                {' • '}
+                {inscription.creneaux?.heure_debut} - {inscription.creneaux?.heure_fin}
+              </div>
+              {inscription.notes && (
+                <div className="text-sm text-muted-foreground mt-1">
+                  Notes: {inscription.notes}
+                </div>
+              )}
+            </div>
+            <Badge variant="outline" className="bg-green-100 text-green-800 border-green-300">
+              Confirmée
+            </Badge>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};
+
 const InscriptionForm = () => {
   const { toast } = useToast();
   const { user } = useAuth();
@@ -508,26 +594,6 @@ const InscriptionForm = () => {
   return (
     <Layout title="Inscription aux créneaux">
       <div className="space-y-6">
-        {/* Règles importantes */}
-        <Card className="gradient-card shadow-soft border-border/50 border-l-4 border-l-info">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-foreground">
-              <span className="text-xl">📋</span>
-              Règles importantes
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ul className="text-sm text-muted-foreground space-y-2">
-              <li>• Maximum 2 inscriptions par mois</li>
-              <li>• Pas deux fois le même créneau dans le mois</li>
-              <li>• Diffusion: 2-3 personnes dont au moins 1 homme</li>
-              <li>• Installation: 2 personnes maximum</li>
-              <li>• Validation requise par l'administrateur</li>
-              <li>• Seulement les dimanches</li>
-            </ul>
-          </CardContent>
-        </Card>
-
         {/* Type d'activité */}
         <Card className="gradient-card shadow-soft border-border/50">
           <CardHeader>
@@ -556,158 +622,213 @@ const InscriptionForm = () => {
           </CardContent>
         </Card>
 
-        {/* Calendrier et créneaux côte à côte */}
+        {/* Layout principal: Calendrier + Créneaux à gauche, Inscriptions à droite */}
         {formData.type_activite_id && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Calendrier */}
-            <Card className="gradient-card shadow-soft border-border/50">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-foreground">
-                  <span className="text-xl">📅</span>
-                  Sélectionner une date
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="border rounded-md bg-background">
-                  <Calendar
-                    mode="single"
-                    selected={selectedDate}
-                    onSelect={handleDateSelect}
-                    disabled={(date) => {
-                      const today = new Date();
-                      today.setHours(0, 0, 0, 0);
-                      return date < today; // Toutes les dates dans le futur
-                    }}
-                    weekStartsOn={1} // Lundi
-                    className="p-3"
-                    locale={fr}
-                  />
-                </div>
-              </CardContent>
-            </Card>
+            {/* Colonne gauche: Calendrier et Créneaux */}
+            <div className="space-y-6">
+              {/* Calendrier */}
+              <Card className="gradient-card shadow-soft border-border/50">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-foreground">
+                    <span className="text-xl">📅</span>
+                    Sélectionner une date
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="border rounded-md bg-background">
+                    <Calendar
+                      mode="single"
+                      selected={selectedDate}
+                      onSelect={handleDateSelect}
+                      disabled={(date) => {
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0);
+                        return date < today; // Toutes les dates dans le futur
+                      }}
+                      weekStartsOn={1} // Lundi
+                      className="p-3"
+                      locale={fr}
+                    />
+                  </div>
+                </CardContent>
+              </Card>
 
-            {/* Créneaux disponibles */}
-            <Card className="gradient-card shadow-soft border-border/50">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-foreground">
-                  <span className="text-xl">⏰</span>
-                  Créneaux disponibles
-                  {selectedDate && (
-                    <span className="text-sm font-normal text-muted-foreground">
-                      - {format(selectedDate, 'EEEE d MMMM yyyy', { locale: fr })}
-                    </span>
-                  )}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {formData.date ? (
-                  <div className="space-y-3">
-                    {creneaux.length > 0 ? (
-                      creneaux.map((creneau) => (
-                        <Collapsible
-                          key={creneau.id}
-                          open={expandedCreneaux.has(creneau.id)}
-                          onOpenChange={() => toggleCreneauExpansion(creneau.id)}
-                        >
-                          <div className="border rounded-lg p-4 space-y-3">
-                            {/* En-tête du créneau */}
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-3">
-                                <CollapsibleTrigger asChild>
-                                  <Button variant="ghost" size="sm" className="p-0">
-                                    {expandedCreneaux.has(creneau.id) ? (
-                                      <ChevronDown className="h-4 w-4" />
-                                    ) : (
-                                      <ChevronRight className="h-4 w-4" />
-                                    )}
-                                  </Button>
-                                </CollapsibleTrigger>
-                                <div>
-                                  <div className="font-medium">
-                                    {creneau.heure_debut} - {creneau.heure_fin}
-                                  </div>
-                                  <div className="text-sm text-muted-foreground">
-                                    {creneau.inscriptions_count}/{creneau.max_participants} inscrits
-                                  </div>
-                                </div>
-                              </div>
-                              <Badge variant={creneau.places_disponibles > 0 ? "default" : "secondary"}>
-                                {creneau.places_disponibles > 0 
-                                  ? `${creneau.places_disponibles} places`
-                                  : 'Complet'
-                                }
-                              </Badge>
-                            </div>
-
-                            {/* Places occupées et libres */}
-                            <div className="grid grid-cols-2 gap-2">
-                              {/* Places occupées */}
-                              {creneau.inscriptions?.map((inscription: Tables<'inscriptions'>, index: number) => (
-                                <div
-                                  key={inscription.id}
-                                  className={cn(
-                                    "flex items-center gap-2 p-2 rounded border",
-                                    inscription.confirme 
-                                      ? "bg-green-50 border-green-200" 
-                                      : "bg-yellow-50 border-yellow-200"
-                                  )}
-                                >
-                                  <User className="h-4 w-4" />
-                                  <span className="text-sm truncate">
-                                    {inscription.proclamateurs?.profiles?.prenom} {inscription.proclamateurs?.profiles?.nom}
-                                  </span>
-                                  {inscription.confirme && (
-                                    <Badge variant="outline" className="text-xs">Validé</Badge>
-                                  )}
-                                </div>
-                              ))}
-
-                              {/* Places libres */}
-                              {Array.from({ length: creneau.places_disponibles }).map((_, index) => (
-                                <button
-                                  key={`libre-${index}`}
-                                  onClick={() => handleSlotClick(creneau)}
-                                  className="flex items-center justify-center gap-2 p-2 rounded border border-dashed border-muted-foreground/30 hover:border-primary hover:bg-primary/5 transition-colors"
-                                  disabled={loading}
-                                >
-                                  <Plus className="h-4 w-4 text-muted-foreground" />
-                                  <span className="text-sm text-muted-foreground">
-                                    Place libre
-                                  </span>
-                                </button>
-                              ))}
-                            </div>
-
-                            {/* Détails étendus */}
-                            <CollapsibleContent className="space-y-2">
-                              {creneau.notes && (
-                                <div className="text-sm text-muted-foreground bg-muted p-2 rounded">
-                                  <strong>Notes:</strong> {creneau.notes}
-                                </div>
-                              )}
-                              {creneau.responsable_id && (
-                                <div className="flex items-center gap-2 text-sm">
-                                  <Crown className="h-4 w-4 text-yellow-500" />
-                                  <span>Responsable assigné</span>
-                                </div>
-                              )}
-                            </CollapsibleContent>
-                          </div>
-                        </Collapsible>
-                      ))
-                    ) : (
-                      <div className="text-center py-8 text-muted-foreground">
-                        <p>Aucun créneau disponible pour cette date</p>
-                      </div>
+              {/* Créneaux disponibles */}
+              <Card className="gradient-card shadow-soft border-border/50">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-foreground">
+                    <span className="text-xl">⏰</span>
+                    Créneaux disponibles
+                    {selectedDate && (
+                      <span className="text-sm font-normal text-muted-foreground">
+                        - {format(selectedDate, 'EEEE d MMMM yyyy', { locale: fr })}
+                      </span>
                     )}
-                  </div>
-                ) : (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <p>Sélectionnez une date pour voir les créneaux disponibles</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {formData.date ? (
+                    <div className="space-y-3">
+                      {creneaux.length > 0 ? (
+                        creneaux.map((creneau) => (
+                          <Collapsible
+                            key={creneau.id}
+                            open={expandedCreneaux.has(creneau.id)}
+                            onOpenChange={() => toggleCreneauExpansion(creneau.id)}
+                          >
+                            <div className="border rounded-lg p-4 space-y-3">
+                              {/* En-tête du créneau */}
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                  <CollapsibleTrigger asChild>
+                                    <Button variant="ghost" size="sm" className="p-0">
+                                      {expandedCreneaux.has(creneau.id) ? (
+                                        <ChevronDown className="h-4 w-4" />
+                                      ) : (
+                                        <ChevronRight className="h-4 w-4" />
+                                      )}
+                                    </Button>
+                                  </CollapsibleTrigger>
+                                  <div>
+                                    <div className="font-medium">
+                                      {creneau.heure_debut} - {creneau.heure_fin}
+                                    </div>
+                                    <div className="text-sm text-muted-foreground">
+                                      {creneau.inscriptions_count}/{creneau.max_participants} inscrits
+                                    </div>
+                                  </div>
+                                </div>
+                                <Badge variant={creneau.places_disponibles > 0 ? "default" : "secondary"}>
+                                  {creneau.places_disponibles > 0 
+                                    ? `${creneau.places_disponibles} places`
+                                    : 'Complet'
+                                  }
+                                </Badge>
+                              </div>
+
+                              {/* Places occupées et libres */}
+                              <div className="grid grid-cols-2 gap-2">
+                                {/* Places occupées */}
+                                {creneau.inscriptions?.map((inscription: Tables<'inscriptions'>, index: number) => (
+                                  <div
+                                    key={inscription.id}
+                                    className={cn(
+                                      "flex items-center gap-2 p-2 rounded border",
+                                      inscription.confirme 
+                                        ? "bg-green-50 border-green-200" 
+                                        : "bg-yellow-50 border-yellow-200"
+                                    )}
+                                  >
+                                    <User className="h-4 w-4" />
+                                    <span className="text-sm truncate">
+                                      {inscription.proclamateurs?.profiles?.prenom} {inscription.proclamateurs?.profiles?.nom}
+                                    </span>
+                                    {inscription.confirme && (
+                                      <Badge variant="outline" className="text-xs">Validé</Badge>
+                                    )}
+                                  </div>
+                                ))}
+
+                                {/* Places libres */}
+                                {Array.from({ length: creneau.places_disponibles }).map((_, index) => (
+                                  <button
+                                    key={`libre-${index}`}
+                                    onClick={() => handleSlotClick(creneau)}
+                                    className="flex items-center justify-center gap-2 p-2 rounded border border-dashed border-muted-foreground/30 hover:border-primary hover:bg-primary/5 transition-colors"
+                                    disabled={loading}
+                                  >
+                                    <Plus className="h-4 w-4 text-muted-foreground" />
+                                    <span className="text-sm text-muted-foreground">
+                                      Place libre
+                                    </span>
+                                  </button>
+                                ))}
+                              </div>
+
+                              {/* Détails étendus */}
+                              <CollapsibleContent className="space-y-2">
+                                {creneau.notes && (
+                                  <div className="text-sm text-muted-foreground bg-muted p-2 rounded">
+                                    <strong>Notes:</strong> {creneau.notes}
+                                  </div>
+                                )}
+                                {creneau.responsable_id && (
+                                  <div className="flex items-center gap-2 text-sm">
+                                    <Crown className="h-4 w-4 text-yellow-500" />
+                                    <span>Responsable assigné</span>
+                                  </div>
+                                )}
+                              </CollapsibleContent>
+                            </div>
+                          </Collapsible>
+                        ))
+                      ) : (
+                        <div className="text-center py-8 text-muted-foreground">
+                          <p>Aucun créneau disponible pour cette date</p>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <p>Sélectionnez une date pour voir les créneaux disponibles</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Notes optionnelles */}
+              {formData.date && (
+                <Card className="gradient-card shadow-soft border-border/50">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-foreground">
+                      <span className="text-xl">📝</span>
+                      Notes (optionnel)
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <Input
+                      value={formData.notes}
+                      onChange={(e) => handleInputChange('notes', e.target.value)}
+                      placeholder="Remarques particulières pour vos inscriptions..."
+                    />
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+
+            {/* Colonne droite: Inscriptions */}
+            <div className="space-y-6">
+              {/* Mes inscriptions en attente */}
+              {proclamateurData && (
+                <Card className="gradient-card shadow-soft border-border/50 border-l-4 border-l-warning">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-foreground">
+                      <span className="text-xl">⏳</span>
+                      Mes inscriptions en attente
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <MesInscriptions proclamateurId={proclamateurData.id} />
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Mes inscriptions confirmées */}
+              {proclamateurData && (
+                <Card className="gradient-card shadow-soft border-border/50 border-l-4 border-l-success">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-foreground">
+                      <span className="text-xl">✅</span>
+                      Mes inscriptions validées
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <MesInscriptionsConfirmees proclamateurId={proclamateurData.id} />
+                  </CardContent>
+                </Card>
+              )}
+            </div>
           </div>
         )}
 
@@ -721,39 +842,25 @@ const InscriptionForm = () => {
           </Card>
         )}
 
-        {/* Mes inscriptions en attente */}
-        {proclamateurData && (
-          <Card className="gradient-card shadow-soft border-border/50 border-l-4 border-l-warning">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-foreground">
-                <span className="text-xl">⏳</span>
-                Mes inscriptions en attente
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <MesInscriptions proclamateurId={proclamateurData.id} />
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Notes optionnelles */}
-        {formData.date && (
-          <Card className="gradient-card shadow-soft border-border/50">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-foreground">
-                <span className="text-xl">📝</span>
-                Notes (optionnel)
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Input
-                value={formData.notes}
-                onChange={(e) => handleInputChange('notes', e.target.value)}
-                placeholder="Remarques particulières pour vos inscriptions..."
-              />
-            </CardContent>
-          </Card>
-        )}
+        {/* Règles importantes - déplacées à la fin */}
+        <Card className="gradient-card shadow-soft border-border/50 border-l-4 border-l-info">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-foreground">
+              <span className="text-xl">📋</span>
+              Règles importantes
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="text-sm text-muted-foreground space-y-2">
+              <li>• Maximum 2 inscriptions par mois</li>
+              <li>• Pas deux fois le même créneau dans le mois</li>
+              <li>• Diffusion: 2-3 personnes dont au moins 1 homme</li>
+              <li>• Installation: 2 personnes maximum</li>
+              <li>• Validation requise par l'administrateur</li>
+              <li>• Seulement les dimanches</li>
+            </ul>
+          </CardContent>
+        </Card>
 
         {/* Bouton retour */}
         <div className="flex justify-end">
