@@ -49,7 +49,7 @@ const CreneauxGestion = () => {
   const [affiches, setAffiches] = useState<Affiche[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
-  const [selectedTypeActivite, setSelectedTypeActivite] = useState<string>("");
+  const [selectedTypeActivite, setSelectedTypeActivite] = useState<string>("all");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingCreneau, setEditingCreneau] = useState<Creneau | null>(null);
   
@@ -61,7 +61,7 @@ const CreneauxGestion = () => {
     min_participants: 1,
     max_participants: 2,
     nombre_presentoirs_recommandes: 0,
-    affiche_id: "",
+    affiche_id: "none",
     notes: ""
   });
 
@@ -144,7 +144,7 @@ const CreneauxGestion = () => {
 
       const dataToSave = {
         ...formData,
-        affiche_id: formData.affiche_id || null,
+        affiche_id: formData.affiche_id && formData.affiche_id !== "none" ? formData.affiche_id : null,
         notes: formData.notes || null
       };
 
@@ -248,7 +248,7 @@ const CreneauxGestion = () => {
       min_participants: 1,
       max_participants: 2,
       nombre_presentoirs_recommandes: 0,
-      affiche_id: "",
+      affiche_id: "none",
       notes: ""
     });
   };
@@ -263,7 +263,7 @@ const CreneauxGestion = () => {
       min_participants: creneau.min_participants,
       max_participants: creneau.max_participants,
       nombre_presentoirs_recommandes: creneau.nombre_presentoirs_recommandes,
-      affiche_id: creneau.affiche_id || "",
+      affiche_id: creneau.affiche_id || "none",
       notes: creneau.notes || ""
     });
     setIsDialogOpen(true);
@@ -375,14 +375,14 @@ const CreneauxGestion = () => {
               <div>
                 <Label htmlFor="affiche">Affiche (optionnel)</Label>
                 <Select
-                  value={formData.affiche_id}
+                  value={formData.affiche_id || "none"}
                   onValueChange={(value) => setFormData({ ...formData, affiche_id: value })}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Sélectionner une affiche" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Aucune affiche</SelectItem>
+                    <SelectItem value="none">Aucune affiche</SelectItem>
                     {affiches.map((affiche) => (
                       <SelectItem key={affiche.id} value={affiche.id}>
                         {affiche.nom}
@@ -435,7 +435,7 @@ const CreneauxGestion = () => {
                 <SelectValue placeholder="Tous les types" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Tous les types</SelectItem>
+                <SelectItem value="all">Tous les types</SelectItem>
                 {typesActivite.map((type) => (
                   <SelectItem key={type.id} value={type.id}>
                     {type.nom}

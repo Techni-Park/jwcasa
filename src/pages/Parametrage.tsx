@@ -14,30 +14,17 @@ import { Badge } from "@/components/ui/badge";
 import { Settings, Clock, UserCheck, CalendarDays } from "lucide-react";
 import CreneauxGestion from "@/components/CreneauxGestion";
 import { useCallback } from "react";
+import type { Tables } from "@/integrations/supabase/types";
 
-interface TypeActivite {
-  id: string;
-  nom: string;
-  description: string | null;
-  valideur_id: string | null;
-  recurrence_enabled: boolean;
-  recurrence_days: number[];
-  recurrence_weeks: number[];
-  default_heure_debut: string | null;
-  default_heure_fin: string | null;
-  auto_create_slots: boolean;
+type TypeActivite = Tables<'type_activite'> & {
   valideur?: {
     nom: string;
     prenom: string;
   };
-}
+};
 
-interface Profile {
-  id: string;
-  nom: string;
-  prenom: string;
-  role: string;
-}
+type Profile = Tables<'profiles'>;
+
 
 const JOURS_SEMAINE = [
   { value: 0, label: "Dimanche" },
@@ -102,7 +89,7 @@ const Parametrage = () => {
     } finally {
       setLoading(false);
     }
-  }, [toast, setLoading]);
+  }, [toast]);
 
   useEffect(() => {
     fetchData();
@@ -144,9 +131,10 @@ const Parametrage = () => {
   const handleRecurrenceDayChange = (day: number, checked: boolean) => {
     if (!selectedType) return;
 
+    const currentDays = selectedType.recurrence_days || [];
     const newDays = checked
-      ? [...selectedType.recurrence_days, day].sort()
-      : selectedType.recurrence_days.filter(d => d !== day);
+      ? [...currentDays, day].sort()
+      : currentDays.filter(d => d !== day);
 
     setSelectedType({
       ...selectedType,
@@ -157,9 +145,10 @@ const Parametrage = () => {
   const handleRecurrenceWeekChange = (week: number, checked: boolean) => {
     if (!selectedType) return;
 
+    const currentWeeks = selectedType.recurrence_weeks || [];
     const newWeeks = checked
-      ? [...selectedType.recurrence_weeks, week].sort()
-      : selectedType.recurrence_weeks.filter(w => w !== week);
+      ? [...currentWeeks, week].sort()
+      : currentWeeks.filter(w => w !== week);
 
     setSelectedType({
       ...selectedType,
@@ -264,7 +253,7 @@ const Parametrage = () => {
                       >
                         <div className="flex items-center justify-between">
                           <span className="font-medium">{type.nom}</span>
-                          {type.recurrence_enabled && (
+                          {(type.recurrence_enabled ?? false) && (
                             <Badge variant="outline">Récurrence activée</Badge>
                           )}
                         </div>
@@ -283,7 +272,7 @@ const Parametrage = () => {
                     <div className="flex items-center space-x-2">
                       <Checkbox
                         id="recurrence"
-                        checked={selectedType.recurrence_enabled}
+                        checked={selectedType.recurrence_enabled ?? false}
                         onCheckedChange={(checked) =>
                           setSelectedType({
                             ...selectedType,
@@ -294,7 +283,7 @@ const Parametrage = () => {
                       <Label htmlFor="recurrence">Activer la récurrence</Label>
                     </div>
 
-                    {selectedType.recurrence_enabled && (
+                    {(selectedType.recurrence_enabled ?? false) && (
                       <>
                         <div>
                           <Label className="text-sm font-medium">Jours de la semaine</Label>
@@ -303,7 +292,7 @@ const Parametrage = () => {
                               <div key={jour.value} className="flex items-center space-x-2">
                                 <Checkbox
                                   id={`jour-${jour.value}`}
-                                  checked={selectedType.recurrence_days.includes(jour.value)}
+                                  checked={selectedType.recurrence_days?.includes(jour.value) ?? false}
                                   onCheckedChange={(checked) =>
                                     handleRecurrenceDayChange(jour.value, checked as boolean)
                                   }
@@ -323,7 +312,7 @@ const Parametrage = () => {
                               <div key={semaine.value} className="flex items-center space-x-2">
                                 <Checkbox
                                   id={`semaine-${semaine.value}`}
-                                  checked={selectedType.recurrence_weeks.includes(semaine.value)}
+                                  checked={selectedType.recurrence_weeks?.includes(semaine.value) ?? false}
                                   onCheckedChange={(checked) =>
                                     handleRecurrenceWeekChange(semaine.value, checked as boolean)
                                   }
@@ -370,7 +359,7 @@ const Parametrage = () => {
                         <div className="flex items-center space-x-2">
                           <Checkbox
                             id="auto-create"
-                            checked={selectedType.auto_create_slots}
+                            checked={selectedType.auto_create_slots ?? false}
                             onCheckedChange={(checked) =>
                               setSelectedType({
                                 ...selectedType,
