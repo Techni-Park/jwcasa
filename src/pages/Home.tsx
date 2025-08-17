@@ -356,21 +356,39 @@ const Home = () => {
             <Link to="/inscription">
               <Button variant="secondary" className="flex items-center gap-2">
                 <span className="text-lg">📅</span>
-                Inscription créneaux
+                Inscription
               </Button>
             </Link>
             <Link to="/rapport">
               <Button className="flex items-center gap-2">
                 <span className="text-lg">📝</span>
-                Nouveau rapport
+                Rapport
               </Button>
             </Link>
+            <Button 
+              variant="outline" 
+              className="flex items-center gap-2"
+              onClick={() => {
+                const statsElement = document.querySelector('[data-id="stats-accordion"]');
+                if (statsElement) {
+                  statsElement.scrollIntoView({ behavior: 'smooth' });
+                  // Ouvrir l'accordéon si fermé
+                  const triggerButton = statsElement.querySelector('[data-state="closed"]');
+                  if (triggerButton) {
+                    (triggerButton as HTMLButtonElement).click();
+                  }
+                }
+              }}
+            >
+              <span className="text-lg">📊</span>
+              Stats
+            </Button>
           </CardContent>
         </Card>
 
         {/* Accordéon Statistiques */}
         <Accordion type="single" collapsible>
-          <AccordionItem value="stats" className="border rounded-lg gradient-card shadow-soft border-border/50">
+          <AccordionItem value="stats" className="border rounded-lg gradient-card shadow-soft border-border/50" data-id="stats-accordion">
             <AccordionTrigger className="px-4 py-3 hover:no-underline">
               <div className="flex items-center gap-3">
                 <span className="text-lg">📊</span>

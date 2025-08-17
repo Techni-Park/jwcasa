@@ -217,7 +217,7 @@ const RapportForm = () => {
 
   if (loading) {
     return (
-      <Layout title="Nouveau rapport d'activité">
+      <Layout title="Rapport d'activité">
         <div className="flex items-center justify-center py-12">
           <div className="text-center">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
@@ -229,7 +229,7 @@ const RapportForm = () => {
   }
 
   return (
-    <Layout title="Nouveau rapport d'activité">
+    <Layout title="Rapport d'activité">
       <form onSubmit={handleSubmit} className="space-y-6">
         {/* Sélection du créneau */}
         <Card className="gradient-card shadow-soft border-border/50">
