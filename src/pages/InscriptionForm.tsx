@@ -218,6 +218,7 @@ const InscriptionForm = () => {
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [selectedCreneauForInscription, setSelectedCreneauForInscription] = useState<CreneauDisponible | null>(null);
   const [violatedRules, setViolatedRules] = useState<string[]>([]);
+  const [isTemporaryInscription, setIsTemporaryInscription] = useState(false);
 
   useEffect(() => {
     if (user) {
