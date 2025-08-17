@@ -341,15 +341,41 @@ const Home = () => {
         </Card>
       </div>
 
-      {/* Accordéon Statistiques */}
-      <Accordion type="single" collapsible className="mb-6">
-        <AccordionItem value="stats" className="border rounded-lg gradient-card shadow-soft border-border/50">
-          <AccordionTrigger className="px-4 py-3 hover:no-underline">
-            <div className="flex items-center gap-3">
-              <span className="text-lg">📊</span>
-              <span className="font-medium">Voir les chiffres du mois</span>
-            </div>
-          </AccordionTrigger>
+      {/* Section Statistiques et Actions rapides */}
+      <div className="mb-6 space-y-4">
+        {/* Actions rapides */}
+        <Card className="gradient-card shadow-soft border-border/50">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-foreground">
+              <span className="text-xl">🚀</span>
+              Actions rapides
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-wrap gap-3">
+            <Link to="/inscription">
+              <Button variant="secondary" className="flex items-center gap-2">
+                <span className="text-lg">📅</span>
+                Inscription créneaux
+              </Button>
+            </Link>
+            <Link to="/rapport">
+              <Button className="flex items-center gap-2">
+                <span className="text-lg">📝</span>
+                Nouveau rapport
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
+
+        {/* Accordéon Statistiques */}
+        <Accordion type="single" collapsible>
+          <AccordionItem value="stats" className="border rounded-lg gradient-card shadow-soft border-border/50">
+            <AccordionTrigger className="px-4 py-3 hover:no-underline">
+              <div className="flex items-center gap-3">
+                <span className="text-lg">📊</span>
+                <span className="font-medium">Voir les chiffres du mois</span>
+              </div>
+            </AccordionTrigger>
           <AccordionContent className="px-4 pb-4">
             <div className="flex items-center gap-4 mb-4">
               <span className="text-sm font-medium">Statistiques pour:</span>
@@ -400,6 +426,7 @@ const Home = () => {
           </AccordionContent>
         </AccordionItem>
       </Accordion>
+      </div>
 
       {/* Layout principal */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
@@ -440,29 +467,6 @@ const Home = () => {
             </Card>
           )}
 
-          {/* Actions rapides */}
-          <Card className="gradient-card shadow-soft border-border/50">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-foreground">
-                <span className="text-xl">🚀</span>
-                Actions rapides
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <Link to="/inscription">
-                <Button variant="secondary" className="w-full justify-start">
-                  <span className="text-lg mr-2">📅</span>
-                  Inscription créneaux
-                </Button>
-              </Link>
-              <Link to="/rapport">
-                <Button className="w-full justify-start">
-                  <span className="text-lg mr-2">📝</span>
-                  Nouveau rapport
-                </Button>
-              </Link>
-            </CardContent>
-          </Card>
         </div>
       </div>
 

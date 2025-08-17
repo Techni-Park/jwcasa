@@ -33,6 +33,12 @@ type CreneauDisponible = Tables<'creneaux'> & {
 type Profile = Tables<'profiles'>;
 type Proclamateur = Tables<'proclamateurs'>;
 
+// Fonction utilitaire pour formater l'heure sans les secondes
+const formatTime = (timeString: string) => {
+  if (!timeString) return '';
+  return timeString.substring(0, 5); // Garde seulement HH:MM
+};
+
 const MesInscriptions = ({ proclamateurId }: { proclamateurId: string }) => {
   const [inscriptionsEnAttente, setInscriptionsEnAttente] = useState<InscriptionAvecCreneau[]>([]);
   const [loading, setLoading] = useState(true);
@@ -94,7 +100,7 @@ const MesInscriptions = ({ proclamateurId }: { proclamateurId: string }) => {
               <div className="text-sm text-muted-foreground">
                 {format(new Date(inscription.creneaux?.date_creneau), 'EEEE d MMMM yyyy', { locale: fr })}
                 {' • '}
-                {inscription.creneaux?.heure_debut} - {inscription.creneaux?.heure_fin}
+                {formatTime(inscription.creneaux?.heure_debut)} - {formatTime(inscription.creneaux?.heure_fin)}
               </div>
               {inscription.notes && (
                 <div className="text-sm text-muted-foreground mt-1">
@@ -180,7 +186,7 @@ const MesInscriptionsConfirmees = ({ proclamateurId }: { proclamateurId: string 
               <div className="text-sm text-muted-foreground">
                 {format(new Date(inscription.creneaux?.date_creneau), 'EEEE d MMMM yyyy', { locale: fr })}
                 {' • '}
-                {inscription.creneaux?.heure_debut} - {inscription.creneaux?.heure_fin}
+                {formatTime(inscription.creneaux?.heure_debut)} - {formatTime(inscription.creneaux?.heure_fin)}
               </div>
               {inscription.notes && (
                 <div className="text-sm text-muted-foreground mt-1">
@@ -457,7 +463,8 @@ const InscriptionForm = () => {
           proclamateur_id: proclamateurData.id,
           creneau_id: selectedCreneauForInscription.id,
           notes: formData.notes,
-          confirme: false
+          confirme: false,
+          statut: isTemporaryInscription ? 'temporaire' : null
         });
 
       if (error) throw error;
@@ -482,6 +489,7 @@ const InscriptionForm = () => {
       setShowConfirmDialog(false);
       setSelectedCreneauForInscription(null);
       setViolatedRules([]);
+      setIsTemporaryInscription(false);
     }
   };
 
@@ -739,7 +747,7 @@ const InscriptionForm = () => {
                                   </CollapsibleTrigger>
                                   <div>
                                     <div className="font-medium">
-                                      {creneau.heure_debut} - {creneau.heure_fin}
+                                      {formatTime(creneau.heure_debut)} - {formatTime(creneau.heure_fin)}
                                     </div>
                                     <div className="text-sm text-muted-foreground">
                                       {creneau.inscriptions_count}/{creneau.max_participants} inscrits
@@ -755,42 +763,58 @@ const InscriptionForm = () => {
                               </div>
 
                               {/* Places occupées et libres */}
-                              <div className="grid grid-cols-2 gap-2">
-                                {/* Places occupées */}
-                                {creneau.inscriptions?.map((inscription: Tables<'inscriptions'>, index: number) => (
-                                  <div
-                                    key={inscription.id}
-                                    className={cn(
-                                      "flex items-center gap-2 p-2 rounded border",
-                                      inscription.confirme 
-                                        ? "bg-green-50 border-green-200" 
-                                        : "bg-yellow-50 border-yellow-200"
-                                    )}
-                                  >
-                                    <User className="h-4 w-4" />
-                                    <span className="text-sm truncate">
-                                      {inscription.proclamateurs?.profiles?.prenom} {inscription.proclamateurs?.profiles?.nom}
-                                    </span>
-                                    {inscription.confirme && (
-                                      <Badge variant="outline" className="text-xs">Validé</Badge>
-                                    )}
-                                  </div>
-                                ))}
+                              <div className="space-y-3">
+                                <div className="grid grid-cols-2 gap-2">
+                                  {/* Places occupées */}
+                                  {creneau.inscriptions?.map((inscription: Tables<'inscriptions'>, index: number) => (
+                                    <div
+                                      key={inscription.id}
+                                      className={cn(
+                                        "flex items-center gap-2 p-2 rounded border",
+                                        inscription.confirme 
+                                          ? "bg-green-50 border-green-200" 
+                                          : "bg-yellow-50 border-yellow-200"
+                                      )}
+                                    >
+                                      <User className="h-4 w-4" />
+                                      <span className="text-sm truncate">
+                                        {inscription.proclamateurs?.profiles?.prenom} {inscription.proclamateurs?.profiles?.nom}
+                                      </span>
+                                      {inscription.confirme && (
+                                        <Badge variant="outline" className="text-xs">Validé</Badge>
+                                      )}
+                                    </div>
+                                  ))}
 
-                                {/* Places libres */}
-                                {Array.from({ length: creneau.places_disponibles }).map((_, index) => (
-                                  <button
-                                    key={`libre-${index}`}
-                                    onClick={() => handleSlotClick(creneau)}
-                                    className="flex items-center justify-center gap-2 p-2 rounded border border-dashed border-muted-foreground/30 hover:border-primary hover:bg-primary/5 transition-colors"
-                                    disabled={loading}
-                                  >
-                                    <Plus className="h-4 w-4 text-muted-foreground" />
-                                    <span className="text-sm text-muted-foreground">
-                                      Place libre
-                                    </span>
-                                  </button>
-                                ))}
+                                  {/* Places libres */}
+                                  {Array.from({ length: creneau.places_disponibles }).map((_, index) => (
+                                    <button
+                                      key={`libre-${index}`}
+                                      onClick={() => handleSlotClick(creneau)}
+                                      className="flex items-center justify-center gap-2 p-2 rounded border border-dashed border-muted-foreground/30 hover:border-primary hover:bg-primary/5 transition-colors"
+                                      disabled={loading}
+                                    >
+                                      <Plus className="h-4 w-4 text-muted-foreground" />
+                                      <span className="text-sm text-muted-foreground">
+                                        Place libre
+                                      </span>
+                                    </button>
+                                  ))}
+                                </div>
+                                
+                                {/* Option inscription temporaire */}
+                                <div className="flex items-center space-x-2 p-2 bg-blue-50 border border-blue-200 rounded">
+                                  <input
+                                    type="checkbox"
+                                    id={`temp-${creneau.id}`}
+                                    checked={isTemporaryInscription}
+                                    onChange={(e) => setIsTemporaryInscription(e.target.checked)}
+                                    className="rounded border-gray-300"
+                                  />
+                                  <label htmlFor={`temp-${creneau.id}`} className="text-sm text-blue-700 cursor-pointer">
+                                    Inscription temporaire (remplacement)
+                                  </label>
+                                </div>
                               </div>
 
                               {/* Détails étendus */}
@@ -893,7 +917,7 @@ const InscriptionForm = () => {
                     </strong>{' '}
                     de{' '}
                     <strong>
-                      {selectedCreneauForInscription?.heure_debut} - {selectedCreneauForInscription?.heure_fin}
+                      {formatTime(selectedCreneauForInscription?.heure_debut)} - {formatTime(selectedCreneauForInscription?.heure_fin)}
                     </strong>
                     ?
                   </p>
