@@ -15,7 +15,7 @@ import { Settings, Users, Calendar, Plus, Edit, Trash2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import type { Tables } from "@/integrations/supabase/types";
-import { format, addDays, addWeeks, startOfDay, parseISO } from "date-fns";
+import { format, addDays, addWeeks, startOfDay, parseISO, isValid } from "date-fns";
 import { fr } from "date-fns/locale";
 
 type TypeActivite = Tables<'type_activite'> & {
@@ -58,6 +58,17 @@ interface CreneauRecurrent {
   notes?: string;
 }
 
+const formatDateSafe = (dateString: string): string => {
+  try {
+    if (!dateString) return 'Date invalide';
+    const date = parseISO(dateString);
+    if (!isValid(date)) return 'Date invalide';
+    return format(date, 'EEEE d MMMM yyyy', { locale: fr });
+  } catch {
+    return 'Date invalide';
+  }
+};
+
 const Parametrage = () => {
   const { toast } = useToast();
   const { user } = useAuth();
@@ -95,10 +106,12 @@ const Parametrage = () => {
           *,
           valideur:profiles!valideur_id(nom, prenom)
         `)
-        .eq('actif', true)
+        .neq('actif', false) // Charger tout sauf les explicitement désactivés
         .order('nom');
 
       if (typesError) throw typesError;
+      
+      console.log('Types d\'activité chargés:', typesData?.length || 0, typesData);
 
       // Charger les profils pour la sélection des valideurs
       const { data: profilesData, error: profilesError } = await supabase
@@ -145,7 +158,17 @@ const Parametrage = () => {
         .order('heure_debut');
 
       if (error) throw error;
-      setCreneaux(data || []);
+      
+      // Filtrer les créneaux avec des dates valides
+      const validCreneaux = (data || []).filter(creneau => {
+        try {
+          return creneau.date_creneau && isValid(parseISO(creneau.date_creneau));
+        } catch {
+          return false;
+        }
+      });
+      
+      setCreneaux(validCreneaux);
     } catch (error) {
       console.error('Erreur lors du chargement des créneaux:', error);
       toast({
@@ -194,11 +217,20 @@ const Parametrage = () => {
   };
 
   const createCreneauxRecurrents = async () => {
-    if (!selectedType) return;
+    if (!selectedType || !creneauRecurrent.date_fin) return;
 
     try {
       const dateDebut = new Date();
       const dateFin = parseISO(creneauRecurrent.date_fin);
+      
+      if (!isValid(dateFin)) {
+        toast({
+          title: "Erreur",
+          description: "Date de fin invalide",
+          variant: "destructive",
+        });
+        return;
+      }
       const creneauxToCreate = [];
 
       let currentDate = startOfDay(dateDebut);
@@ -366,21 +398,27 @@ const Parametrage = () => {
         {/* Sélecteur de type d'activité en en-tête */}
         <Card className="mb-6">
           <CardHeader>
-            <CardTitle>Type d'activité</CardTitle>
+            <CardTitle>Type d'activité ({typesActivite.length} trouvé{typesActivite.length !== 1 ? 's' : ''})</CardTitle>
           </CardHeader>
           <CardContent>
-            <Select value={selectedTypeId} onValueChange={setSelectedTypeId}>
-              <SelectTrigger className="w-full max-w-md">
-                <SelectValue placeholder="Sélectionner un type d'activité" />
-              </SelectTrigger>
-              <SelectContent>
-                {typesActivite.map((type) => (
-                  <SelectItem key={type.id} value={type.id}>
-                    {type.nom}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+            {typesActivite.length > 0 ? (
+              <Select value={selectedTypeId} onValueChange={setSelectedTypeId}>
+                <SelectTrigger className="w-full max-w-md">
+                  <SelectValue placeholder="Sélectionner un type d'activité" />
+                </SelectTrigger>
+                <SelectContent>
+                  {typesActivite.map((type) => (
+                    <SelectItem key={type.id} value={type.id}>
+                      {type.nom}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <div className="text-muted-foreground">
+                Aucun type d'activité disponible. Contactez l'administrateur pour en créer.
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -708,7 +746,7 @@ const Parametrage = () => {
                       <div className="flex justify-between items-start">
                         <div>
                           <div className="font-medium">
-                            {format(parseISO(creneau.date_creneau), 'EEEE d MMMM yyyy', { locale: fr })}
+                            {formatDateSafe(creneau.date_creneau)}
                           </div>
                           <div className="text-sm text-muted-foreground">
                             {creneau.heure_debut} - {creneau.heure_fin}
