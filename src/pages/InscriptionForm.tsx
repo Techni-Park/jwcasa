@@ -487,7 +487,11 @@ const InscriptionForm = () => {
   const handleDateSelect = (date: Date | undefined) => {
     if (date) {
       setSelectedDate(date);
-      const dateString = date.toISOString().split('T')[0];
+      // Utiliser toLocaleDateString pour éviter les problèmes de fuseau horaire
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const day = String(date.getDate()).padStart(2, '0');
+      const dateString = `${year}-${month}-${day}`;
       handleInputChange('date', dateString);
     }
   };
