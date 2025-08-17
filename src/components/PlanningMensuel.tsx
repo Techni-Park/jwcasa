@@ -4,7 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Loader2, Trash2 } from 'lucide-react';
+import { Loader2, Trash2, Plus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { formatTime } from '@/lib/timeUtils';
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday, isSameMonth, startOfWeek, eachWeekOfInterval, addDays, getWeek, isWithinInterval } from 'date-fns';
@@ -241,17 +241,19 @@ const PlanningMensuel = ({ selectedMonth, onMonthChange }: PlanningMensuelProps)
   };
 
   const getStatusColor = (creneau: Creneau) => {
-    if (!proclamateurData) return 'bg-gray-400';
+    const inscriptionsCount = creneau.inscriptions?.length || 0;
+    const minParticipants = creneau.min_participants || 1;
+    const maxParticipants = creneau.max_participants || 2;
     
-    const userInscription = creneau.inscriptions?.find(
-      (ins: any) => ins.proclamateur_id === proclamateurData.id
-    );
-    
-    if (userInscription) {
-      return userInscription.confirme ? 'bg-green-500' : 'bg-yellow-500';
+    if (inscriptionsCount === 0) {
+      return 'bg-red-500'; // Rouge : aucun inscrit
+    } else if (inscriptionsCount < minParticipants) {
+      return 'bg-orange-500'; // Orange : inscrits mais minimum non atteint
+    } else if (inscriptionsCount < maxParticipants) {
+      return 'bg-blue-500'; // Bleu : minimum atteint mais pas maximum
+    } else {
+      return 'bg-green-500'; // Vert : complet
     }
-    
-    return 'bg-blue-500';
   };
 
   const getCreneauxByTypeAndTime = () => {
@@ -359,6 +361,53 @@ const PlanningMensuel = ({ selectedMonth, onMonthChange }: PlanningMensuelProps)
       toast({
         title: "Erreur",
         description: "Impossible de supprimer l'inscription",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleCreateInscription = async (creneauId: string, isReplacement: boolean = false) => {
+    if (!proclamateurData) return;
+
+    try {
+      const { error } = await supabase
+        .from('inscriptions')
+        .insert([
+          {
+            creneau_id: creneauId,
+            proclamateur_id: proclamateurData.id,
+            confirme: false,
+            statut: isReplacement ? 'provisoire' : 'en_attente',
+            date_inscription: new Date().toISOString(),
+            notes: isReplacement ? 'Inscription de remplacement (Plan B)' : null
+          }
+        ]);
+
+      if (error) throw error;
+
+      toast({
+        title: "Succès",
+        description: isReplacement 
+          ? "Votre inscription de remplacement a été créée"
+          : "Votre inscription a été créée",
+      });
+
+      // Recharger les détails
+      if (selectedCellData) {
+        const updatedDetails = await loadCreneauxSemaineDetails(selectedCellData.weekStart, selectedCellData.weekEnd, selectedCellData.activite.id);
+        setSelectedCellData({
+          ...selectedCellData,
+          creneauxSemaine: updatedDetails
+        });
+      }
+
+      // Recharger les créneaux
+      loadCreneaux();
+    } catch (error) {
+      console.error('Erreur lors de l\'inscription:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de créer l'inscription",
         variant: "destructive"
       });
     }
@@ -497,20 +546,20 @@ const PlanningMensuel = ({ selectedMonth, onMonthChange }: PlanningMensuelProps)
           <h4 className="text-sm font-medium mb-2">Légende des couleurs :</h4>
           <div className="flex flex-wrap gap-4 text-xs">
             <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-green-500 rounded-full" />
-              <span>Inscription confirmée</span>
+              <div className="w-3 h-3 bg-red-500 rounded-full" />
+              <span>Aucun inscrit</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-yellow-500 rounded-full" />
-              <span>Inscription en attente</span>
+              <div className="w-3 h-3 bg-orange-500 rounded-full" />
+              <span>Inscrits mais minimum non atteint</span>
             </div>
             <div className="flex items-center gap-2">
               <div className="w-3 h-3 bg-blue-500 rounded-full" />
-              <span>Créneau disponible</span>
+              <span>Minimum atteint, places disponibles</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="w-3 h-3 bg-gray-400 rounded-full" />
-              <span>Non connecté</span>
+              <div className="w-3 h-3 bg-green-500 rounded-full" />
+              <span>Complet</span>
             </div>
           </div>
         </div>
@@ -543,11 +592,74 @@ const PlanningMensuel = ({ selectedMonth, onMonthChange }: PlanningMensuelProps)
                         </Badge>
                       </div>
 
-                      {creneau.inscriptions.length > 0 && (
-                        <div className="space-y-2">
-                          {creneau.inscriptions.map((inscription) => (
-                            <div key={inscription.id} className="flex items-center justify-between p-2 bg-muted/50 rounded">
-                              <div className="flex items-center gap-2">
+                      <div className="space-y-2">
+                        {/* Inscription de l'utilisateur connecté */}
+                        {proclamateurData && (
+                          <div className="p-2 bg-blue-50 border border-blue-200 rounded">
+                            {(() => {
+                              const userInscription = creneau.inscriptions.find(
+                                (ins) => ins.proclamateur_id === proclamateurData.id
+                              );
+                              
+                              if (userInscription) {
+                                return (
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                      <div className={`w-2 h-2 rounded-full ${
+                                        userInscription.confirme ? 'bg-green-500' : 'bg-yellow-500'
+                                      }`} />
+                                      <span className="text-sm font-medium">Vous êtes inscrit</span>
+                                      <Badge variant={
+                                        userInscription.statut === 'confirme' ? "default" : 
+                                        userInscription.statut === 'provisoire' ? "outline" : "secondary"
+                                      } className="text-xs">
+                                        {userInscription.statut === 'confirme' ? "Confirmé" : 
+                                         userInscription.statut === 'provisoire' ? "Remplacement" : "En attente"}
+                                      </Badge>
+                                      {userInscription.notes && userInscription.notes.includes('Plan B') && (
+                                        <span className="text-xs text-orange-600">(Plan B)</span>
+                                      )}
+                                    </div>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => handleDeleteInscription(userInscription.id)}
+                                      className="text-red-600 hover:text-red-700"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                      Se désinscrire
+                                    </Button>
+                                  </div>
+                                );
+                              } else {
+                                const isComplete = creneau.inscriptions.length >= creneau.max_participants;
+                                return (
+                                  <div className="flex items-center justify-between">
+                                    <span className="text-sm text-muted-foreground">Vous n'êtes pas inscrit</span>
+                                    <Button
+                                      size="sm"
+                                      onClick={() => handleCreateInscription(creneau.id, isComplete)}
+                                      className="text-green-600 hover:text-green-700"
+                                    >
+                                      <Plus className="h-4 w-4 mr-1" />
+                                      {isComplete ? "Remplacement" : "S'inscrire"}
+                                    </Button>
+                                  </div>
+                                );
+                              }
+                            })()
+                          )}
+                        </div>
+                        )}
+                        
+                        {/* Autres inscriptions */}
+                        {creneau.inscriptions.filter(ins => ins.proclamateur_id !== proclamateurData?.id).length > 0 && (
+                          <div className="space-y-1">
+                            <h5 className="text-xs font-medium text-muted-foreground">Autres inscrits :</h5>
+                            {creneau.inscriptions
+                              .filter(ins => ins.proclamateur_id !== proclamateurData?.id)
+                              .map((inscription) => (
+                              <div key={inscription.id} className="flex items-center gap-2 p-2 bg-muted/30 rounded">
                                 <div className={`w-2 h-2 rounded-full ${
                                   inscription.confirme ? 'bg-green-500' : 'bg-yellow-500'
                                 }`} />
@@ -558,20 +670,10 @@ const PlanningMensuel = ({ selectedMonth, onMonthChange }: PlanningMensuelProps)
                                   {inscription.confirme ? "Confirmé" : "En attente"}
                                 </Badge>
                               </div>
-                              {proclamateurData && inscription.proclamateur_id === proclamateurData.id && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => handleDeleteInscription(inscription.id)}
-                                  className="text-red-600 hover:text-red-700"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      )}
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   ))
                 ) : (
