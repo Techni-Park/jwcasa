@@ -269,7 +269,16 @@ const InscriptionForm = () => {
         .eq('actif', true)
         .order('heure_debut');
 
-      console.log('📊 Résultat de la requête créneaux:', { data, error });
+      console.log('📊 Résultat de la requête créneaux:', { 
+        data, 
+        error, 
+        count: data?.length || 0,
+        query: {
+          date_creneau: formData.date,
+          type_activite_id: formData.type_activite_id,
+          actif: true
+        }
+      });
 
       if (error) throw error;
       
@@ -391,12 +400,9 @@ const InscriptionForm = () => {
 
   const handleDateSelect = (date: Date | undefined) => {
     if (date) {
-      const isSunday = date.getDay() === 0;
-      if (isSunday) {
-        setSelectedDate(date);
-        const dateString = date.toISOString().split('T')[0];
-        handleInputChange('date', dateString);
-      }
+      setSelectedDate(date);
+      const dateString = date.toISOString().split('T')[0];
+      handleInputChange('date', dateString);
     }
   };
 
@@ -570,7 +576,7 @@ const InscriptionForm = () => {
                     disabled={(date) => {
                       const today = new Date();
                       today.setHours(0, 0, 0, 0);
-                      return date < today || date.getDay() !== 0; // Seulement les dimanches dans le futur
+                      return date < today; // Toutes les dates dans le futur
                     }}
                     weekStartsOn={1} // Lundi
                     className="p-3"

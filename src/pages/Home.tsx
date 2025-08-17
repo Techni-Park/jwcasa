@@ -78,11 +78,17 @@ const MesInscriptionsConfirmees = () => {
         `)
         .eq('proclamateur_id', proclamateurData.id)
         .eq('confirme', true)
-        .gte('creneaux.date_creneau', new Date().toISOString().split('T')[0])
-        .order('date_creneau', { ascending: true, foreignTable: 'creneaux' });
+        .order('date_inscription', { ascending: false });
 
       if (error) throw error;
-      setInscriptionsConfirmees(data || []);
+      
+      // Filtrer les inscriptions pour les créneaux futurs côté client
+      const today = new Date().toISOString().split('T')[0];
+      const inscriptionsFutures = (data || []).filter(inscription => 
+        inscription.creneaux && inscription.creneaux.date_creneau >= today
+      );
+      
+      setInscriptionsConfirmees(inscriptionsFutures);
     } catch (error) {
       console.error('Erreur lors du chargement des inscriptions confirmées:', error);
     } finally {
@@ -261,29 +267,46 @@ const Home = () => {
     calculateStats();
   }, [selectedMonth]);
 
-  const calculateStats = () => {
-    const rapports = JSON.parse(localStorage.getItem('rapports') || '[]');
-    const inscriptions = JSON.parse(localStorage.getItem('inscriptions') || '[]');
+  const calculateStats = async () => {
+    try {
+      // Filtrer par mois sélectionné
+      const [year, month] = selectedMonth.split('-').map(Number);
+      
+      // Charger les rapports depuis Supabase
+      const { data: rapports } = await supabase
+        .from('rapports')
+        .select('*')
+        .eq('annee', year)
+        .eq('mois', month);
+      
+      // Charger les inscriptions en attente depuis Supabase
+      const { data: inscriptions } = await supabase
+        .from('inscriptions')
+        .select('*')
+        .eq('confirme', false);
+      
+      const rapportsMois = rapports || [];
+      const inscriptionsEnAttente = inscriptions?.length || 0;
     
-    // Filtrer par mois sélectionné
-    const [year, month] = selectedMonth.split('-').map(Number);
-    
-    const rapportsMois = rapports.filter((r: Tables<'rapports'>) => {
-      const rapportDate = new Date(r.date);
-      return rapportDate.getFullYear() === year && rapportDate.getMonth() === month - 1;
-    });
-    
-    const inscriptionsEnAttente = inscriptions.filter((i: Tables<'inscriptions'>) => i.statut === 'en_attente').length;
-    
-    setStats({
-      totalRapports: rapportsMois.length,
-      conversationsTotal: rapportsMois.reduce((sum: number, r: Tables<'rapports'>) => sum + parseInt(r.etudes_bibliques?.toString() || '0'), 0),
-      videosTotal: rapportsMois.reduce((sum: number, r: Tables<'rapports'>) => sum + parseInt(r.videos?.toString() || '0'), 0),
-      publicationsTotal: rapportsMois.reduce((sum: number, r: Tables<'rapports'>) => 
-        sum + parseInt(r.revues || '0') + parseInt(r.brochures || '0') + parseInt(r.tracts || '0'), 0
-      ),
-      inscriptionsEnAttente
-    });
+      setStats({
+        totalRapports: rapportsMois.length,
+        conversationsTotal: rapportsMois.reduce((sum: number, r: Tables<'rapports'>) => sum + (r.etudes_bibliques || 0), 0),
+        videosTotal: rapportsMois.reduce((sum: number, r: Tables<'rapports'>) => sum + (r.videos || 0), 0),
+        publicationsTotal: rapportsMois.reduce((sum: number, r: Tables<'rapports'>) => 
+          sum + (r.placements || 0), 0
+        ),
+        inscriptionsEnAttente
+      });
+    } catch (error) {
+      console.error('Erreur lors du calcul des statistiques:', error);
+      setStats({
+        totalRapports: 0,
+        conversationsTotal: 0,
+        videosTotal: 0,
+        publicationsTotal: 0,
+        inscriptionsEnAttente: 0
+      });
+    }
   };
 
   const generateMonthOptions = () => {
