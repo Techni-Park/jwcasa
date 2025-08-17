@@ -13,12 +13,21 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import type { Tables } from '@/integrations/supabase/types';
+
+type InscriptionConfirmee = Tables<'inscriptions'> & {
+  creneaux: Tables<'creneaux'> & {
+    type_activite: Tables<'type_activite'>;
+  };
+};
+
+type Proclamateur = Tables<'proclamateurs'>;
 
 const MesInscriptionsConfirmees = () => {
   const { user } = useAuth();
-  const [inscriptionsConfirmees, setInscriptionsConfirmees] = useState<any[]>([]);
+  const [inscriptionsConfirmees, setInscriptionsConfirmees] = useState<InscriptionConfirmee[]>([]);
   const [loading, setLoading] = useState(true);
-  const [proclamateurData, setProclamateurData] = useState<any>(null);
+  const [proclamateurData, setProclamateurData] = useState<Proclamateur | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -128,9 +137,9 @@ const MesInscriptionsConfirmees = () => {
 
 const MesInscriptionsEnAttente = () => {
   const { user } = useAuth();
-  const [inscriptionsEnAttente, setInscriptionsEnAttente] = useState<any[]>([]);
+  const [inscriptionsEnAttente, setInscriptionsEnAttente] = useState<InscriptionConfirmee[]>([]);
   const [loading, setLoading] = useState(true);
-  const [proclamateurData, setProclamateurData] = useState<any>(null);
+  const [proclamateurData, setProclamateurData] = useState<Proclamateur | null>(null);
 
   useEffect(() => {
     if (user) {
@@ -259,18 +268,18 @@ const Home = () => {
     // Filtrer par mois sélectionné
     const [year, month] = selectedMonth.split('-').map(Number);
     
-    const rapportsMois = rapports.filter((r: any) => {
+    const rapportsMois = rapports.filter((r: Tables<'rapports'>) => {
       const rapportDate = new Date(r.date);
       return rapportDate.getFullYear() === year && rapportDate.getMonth() === month - 1;
     });
     
-    const inscriptionsEnAttente = inscriptions.filter((i: any) => i.statut === 'en_attente').length;
+    const inscriptionsEnAttente = inscriptions.filter((i: Tables<'inscriptions'>) => i.statut === 'en_attente').length;
     
     setStats({
       totalRapports: rapportsMois.length,
-      conversationsTotal: rapportsMois.reduce((sum: number, r: any) => sum + parseInt(r.conversations || '0'), 0),
-      videosTotal: rapportsMois.reduce((sum: number, r: any) => sum + parseInt(r.videos || '0'), 0),
-      publicationsTotal: rapportsMois.reduce((sum: number, r: any) => 
+      conversationsTotal: rapportsMois.reduce((sum: number, r: Tables<'rapports'>) => sum + parseInt(r.etudes_bibliques?.toString() || '0'), 0),
+      videosTotal: rapportsMois.reduce((sum: number, r: Tables<'rapports'>) => sum + parseInt(r.videos?.toString() || '0'), 0),
+      publicationsTotal: rapportsMois.reduce((sum: number, r: Tables<'rapports'>) => 
         sum + parseInt(r.revues || '0') + parseInt(r.brochures || '0') + parseInt(r.tracts || '0'), 0
       ),
       inscriptionsEnAttente

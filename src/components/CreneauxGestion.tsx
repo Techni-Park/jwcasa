@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -65,11 +65,7 @@ const CreneauxGestion = () => {
     notes: ""
   });
 
-  useEffect(() => {
-    fetchData();
-  }, [selectedDate, selectedTypeActivite]);
-
-  const fetchData = async () => {
+  const fetchDataCallback = useCallback(async () => {
     try {
       setLoading(true);
 
@@ -81,53 +77,55 @@ const CreneauxGestion = () => {
         .order('nom');
 
       if (typesError) throw typesError;
+      setTypesActivite(typesData || []);
 
-      // Charger les affiches
-      const { data: affichesData, error: affichesError } = await supabase
-        .from('affiches')
-        .select('id, nom, description')
-        .eq('actif', true)
-        .order('nom');
-
-      if (affichesError) throw affichesError;
-
-      // Charger les créneaux avec filtres
+      // Charger les créneaux pour la date sélectionnée
       let query = supabase
         .from('creneaux')
         .select(`
           *,
-          type_activite:type_activite(nom),
-          affiche:affiches(nom)
+          type_activite:type_activite_id(nom, description),
+          inscriptions(id, proclamateur_id, confirme, notes)
         `)
-        .order('date_creneau', { ascending: false })
+        .eq('date_creneau', selectedDate)
+        .eq('actif', true)
         .order('heure_debut');
 
-      if (selectedDate) {
-        query = query.eq('date_creneau', selectedDate);
-      }
-
-      if (selectedTypeActivite) {
+      if (selectedTypeActivite && selectedTypeActivite !== 'all') {
         query = query.eq('type_activite_id', selectedTypeActivite);
       }
 
       const { data: creneauxData, error: creneauxError } = await query;
-
       if (creneauxError) throw creneauxError;
-
-      setTypesActivite(typesData || []);
-      setAffiches(affichesData || []);
+      
       setCreneaux(creneauxData || []);
+      
+      // Charger les affiches
+      const { data: affichesData, error: affichesError } = await supabase
+        .from('affiches')
+        .select('id, nom')
+        .eq('actif', true)
+        .order('nom');
+      
+      if (affichesError) throw affichesError;
+      setAffiches(affichesData || []);
+      
     } catch (error) {
-      console.error('Erreur lors du chargement:', error);
+      console.error('Erreur lors du chargement des données:', error);
       toast({
         title: "Erreur",
         description: "Impossible de charger les données",
-        variant: "destructive",
+        variant: "destructive"
       });
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedDate, selectedTypeActivite, toast]);
+
+  useEffect(() => {
+    fetchDataCallback();
+  }, [fetchDataCallback]);
+
 
   const handleSubmit = async () => {
     try {

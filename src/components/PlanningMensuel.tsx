@@ -8,6 +8,19 @@ import { format, startOfMonth, endOfMonth, eachDayOfInterval, isToday, isSameMon
 import { fr } from 'date-fns/locale';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import type { Tables } from '@/integrations/supabase/types';
+
+type Creneau = Tables<'creneaux'> & {
+  type_activite: Tables<'type_activite'>;
+  inscriptions_count: number;
+};
+
+type Inscription = Tables<'inscriptions'> & {
+  creneaux: Tables<'creneaux'>;
+};
+
+type Proclamateur = Tables<'proclamateurs'>;
+type TypeActivite = Tables<'type_activite'>;
 
 interface PlanningMensuelProps {
   selectedMonth: string;
@@ -16,10 +29,10 @@ interface PlanningMensuelProps {
 
 const PlanningMensuel = ({ selectedMonth, onMonthChange }: PlanningMensuelProps) => {
   const { user } = useAuth();
-  const [creneaux, setCreneaux] = useState<any[]>([]);
-  const [inscriptions, setInscriptions] = useState<any[]>([]);
-  const [proclamateurData, setProclamateurData] = useState<any>(null);
-  const [typesActivite, setTypesActivite] = useState<any[]>([]);
+  const [creneaux, setCreneaux] = useState<Creneau[]>([]);
+  const [inscriptions, setInscriptions] = useState<Inscription[]>([]);
+  const [proclamateurData, setProclamateurData] = useState<Proclamateur | null>(null);
+  const [typesActivite, setTypesActivite] = useState<TypeActivite[]>([]);
   const [selectedActivity, setSelectedActivity] = useState<string>('all');
   const [currentMonth, setCurrentMonth] = useState(selectedMonth);
   const [selectedWeek, setSelectedWeek] = useState<string>('all');
@@ -232,7 +245,7 @@ const PlanningMensuel = ({ selectedMonth, onMonthChange }: PlanningMensuelProps)
     return weeks;
   };
 
-  const renderDayCell = (day: any) => {
+  const renderDayCell = (day: { date: Date; creneaux: Creneau[]; isCurrentMonth: boolean }) => {
     const { date, creneaux: dayCreneaux, isCurrentMonth } = day;
     
     if (!isCurrentMonth) {
@@ -255,7 +268,7 @@ const PlanningMensuel = ({ selectedMonth, onMonthChange }: PlanningMensuelProps)
         </div>
         
         <div className="space-y-0.5">
-          {dayCreneaux.slice(0, 2).map((creneau: any) => (
+          {dayCreneaux.slice(0, 2).map((creneau: Creneau & { userInscription?: Tables<'inscriptions'> }) => (
             <div key={creneau.id} className="flex items-center gap-1">
               <div className={`w-2 h-2 rounded-full ${
                 creneau.userInscription 
@@ -395,7 +408,7 @@ const PlanningMensuel = ({ selectedMonth, onMonthChange }: PlanningMensuelProps)
                       {format(day.date, 'dd/MM')}
                     </div>
                     <div className="space-y-1">
-                      {day.creneaux.map((creneau: any) => (
+                      {day.creneaux.map((creneau: Creneau & { userInscription?: Tables<'inscriptions'> }) => (
                         <div key={creneau.id} className="flex items-center gap-2 text-xs">
                           <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
                             creneau.userInscription 

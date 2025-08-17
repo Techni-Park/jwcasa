@@ -12,6 +12,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { format, parseISO } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import type { Tables } from '@/integrations/supabase/types';
 
 interface CreneauInscrit {
   id: string;
@@ -29,7 +30,7 @@ const RapportForm = () => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [creneauxInscrits, setCreneauxInscrits] = useState<CreneauInscrit[]>([]);
-  const [userProfile, setUserProfile] = useState<any>(null);
+  const [userProfile, setUserProfile] = useState<Tables<'profiles'> | null>(null);
   const [formData, setFormData] = useState({
     creneau_id: '',
     conversations: '',

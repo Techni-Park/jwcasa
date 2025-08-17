@@ -16,9 +16,25 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import type { Tables } from '@/integrations/supabase/types';
+
+type InscriptionAvecCreneau = Tables<'inscriptions'> & {
+  creneaux: Tables<'creneaux'> & {
+    type_activite: Tables<'type_activite'>;
+  };
+};
+
+type CreneauDisponible = Tables<'creneaux'> & {
+  type_activite: Tables<'type_activite'>;
+  inscriptions_count: number;
+  user_inscriptions: Tables<'inscriptions'>[];
+};
+
+type Profile = Tables<'profiles'>;
+type Proclamateur = Tables<'proclamateurs'>;
 
 const MesInscriptions = ({ proclamateurId }: { proclamateurId: string }) => {
-  const [inscriptionsEnAttente, setInscriptionsEnAttente] = useState<any[]>([]);
+  const [inscriptionsEnAttente, setInscriptionsEnAttente] = useState<InscriptionAvecCreneau[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -99,11 +115,11 @@ const MesInscriptions = ({ proclamateurId }: { proclamateurId: string }) => {
 const InscriptionForm = () => {
   const { toast } = useToast();
   const { user } = useAuth();
-  const [userProfile, setUserProfile] = useState<any>(null);
-  const [proclamateurData, setProclamateurData] = useState<any>(null);
+  const [userProfile, setUserProfile] = useState<Profile | null>(null);
+  const [proclamateurData, setProclamateurData] = useState<Proclamateur | null>(null);
   const [loading, setLoading] = useState(true);
-  const [creneaux, setCreneaux] = useState<any[]>([]);
-  const [typeActivites, setTypeActivites] = useState<any[]>([]);
+  const [creneaux, setCreneaux] = useState<CreneauDisponible[]>([]);
+  const [typeActivites, setTypeActivites] = useState<Tables<'type_activite'>[]>([]);
   const [selectedDate, setSelectedDate] = useState<Date>();
   const [formData, setFormData] = useState({
     date: '',
@@ -112,9 +128,9 @@ const InscriptionForm = () => {
     notes: ''
   });
   const [expandedCreneaux, setExpandedCreneaux] = useState<Set<string>>(new Set());
-  const [inscriptions, setInscriptions] = useState<any[]>([]);
+  const [inscriptions, setInscriptions] = useState<InscriptionAvecCreneau[]>([]);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
-  const [selectedCreneauForInscription, setSelectedCreneauForInscription] = useState<any>(null);
+  const [selectedCreneauForInscription, setSelectedCreneauForInscription] = useState<CreneauDisponible | null>(null);
   const [violatedRules, setViolatedRules] = useState<string[]>([]);
 
   useEffect(() => {
@@ -155,13 +171,15 @@ const InscriptionForm = () => {
       setUserProfile(profile);
 
       // Récupérer les données proclamateur
-      let { data: proclamateur, error: proclamateurError } = await supabase
+      const { data: proclamateurData, error: proclamateurError } = await supabase
         .from('proclamateurs')
         .select('*')
         .eq('profile_id', profile.id)
         .maybeSingle();
 
       if (proclamateurError) throw proclamateurError;
+      
+      let proclamateur = proclamateurData;
       
       // Si pas de données proclamateur, les créer automatiquement
       if (!proclamateur) {
@@ -317,7 +335,7 @@ const InscriptionForm = () => {
     setExpandedCreneaux(newExpanded);
   };
 
-  const handleSlotClick = async (creneau: any) => {
+  const handleSlotClick = async (creneau: CreneauDisponible) => {
     if (creneau.places_disponibles <= 0) return;
     
     const violations = await checkInscriptionRules(creneau.id);
@@ -618,7 +636,7 @@ const InscriptionForm = () => {
                             {/* Places occupées et libres */}
                             <div className="grid grid-cols-2 gap-2">
                               {/* Places occupées */}
-                              {creneau.inscriptions?.map((inscription: any, index: number) => (
+                              {creneau.inscriptions?.map((inscription: Tables<'inscriptions'>, index: number) => (
                                 <div
                                   key={inscription.id}
                                   className={cn(
