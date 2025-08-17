@@ -647,9 +647,8 @@ const PlanningMensuel = ({ selectedMonth, onMonthChange }: PlanningMensuelProps)
                                   </div>
                                 );
                               }
-                            })()
-                          )}
-                        </div>
+                            })()}
+                          </div>
                         )}
                         
                         {/* Autres inscriptions */}
