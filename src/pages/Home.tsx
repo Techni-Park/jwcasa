@@ -79,7 +79,7 @@ const MesInscriptionsConfirmees = () => {
         .eq('proclamateur_id', proclamateurData.id)
         .eq('confirme', true)
         .gte('creneaux.date_creneau', new Date().toISOString().split('T')[0])
-        .order('creneaux.date_creneau', { ascending: true });
+        .order('date_creneau', { ascending: true, foreignTable: 'creneaux' });
 
       if (error) throw error;
       setInscriptionsConfirmees(data || []);

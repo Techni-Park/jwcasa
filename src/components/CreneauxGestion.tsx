@@ -48,7 +48,7 @@ const CreneauxGestion = () => {
   const [typesActivite, setTypesActivite] = useState<TypeActivite[]>([]);
   const [affiches, setAffiches] = useState<Affiche[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedDate, setSelectedDate] = useState<string>("");
+  const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [selectedTypeActivite, setSelectedTypeActivite] = useState<string>("");
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingCreneau, setEditingCreneau] = useState<Creneau | null>(null);
@@ -80,25 +80,29 @@ const CreneauxGestion = () => {
       setTypesActivite(typesData || []);
 
       // Charger les créneaux pour la date sélectionnée
-      let query = supabase
-        .from('creneaux')
-        .select(`
-          *,
-          type_activite:type_activite_id(nom, description),
-          inscriptions(id, proclamateur_id, confirme, notes)
-        `)
-        .eq('date_creneau', selectedDate)
-        .eq('actif', true)
-        .order('heure_debut');
+      if (selectedDate) {
+        let query = supabase
+          .from('creneaux')
+          .select(`
+            *,
+            type_activite:type_activite_id(nom, description),
+            inscriptions(id, proclamateur_id, confirme, notes)
+          `)
+          .eq('date_creneau', selectedDate)
+          .eq('actif', true)
+          .order('heure_debut');
 
-      if (selectedTypeActivite && selectedTypeActivite !== 'all') {
-        query = query.eq('type_activite_id', selectedTypeActivite);
+        if (selectedTypeActivite && selectedTypeActivite !== 'all') {
+          query = query.eq('type_activite_id', selectedTypeActivite);
+        }
+
+        const { data: creneauxData, error: creneauxError } = await query;
+        if (creneauxError) throw creneauxError;
+        
+        setCreneaux(creneauxData || []);
+      } else {
+        setCreneaux([]);
       }
-
-      const { data: creneauxData, error: creneauxError } = await query;
-      if (creneauxError) throw creneauxError;
-      
-      setCreneaux(creneauxData || []);
       
       // Charger les affiches
       const { data: affichesData, error: affichesError } = await supabase
