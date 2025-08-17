@@ -159,7 +159,14 @@ const PlanningMensuel = ({ selectedMonth, onMonthChange }: PlanningMensuelProps)
         .from('creneaux')
         .select(`
           *,
-          type_activite(nom)
+          type_activite(nom),
+          inscriptions(
+            *,
+            proclamateurs(
+              *,
+              profiles(nom, prenom)
+            )
+          )
         `)
         .gte('date_creneau', format(monthStart, 'yyyy-MM-dd'))
         .lte('date_creneau', format(monthEnd, 'yyyy-MM-dd'))
@@ -226,6 +233,44 @@ const PlanningMensuel = ({ selectedMonth, onMonthChange }: PlanningMensuelProps)
     );
   };
 
+  const getCreneauForWeek = (weekStart: Date, weekEnd: Date, creneau: Creneau) => {
+    const weekStartStr = format(weekStart, 'yyyy-MM-dd');
+    const weekEndStr = format(weekEnd, 'yyyy-MM-dd');
+    
+    return creneau.date_creneau >= weekStartStr && creneau.date_creneau <= weekEndStr;
+  };
+
+  const getStatusColor = (creneau: Creneau) => {
+    if (!proclamateurData) return 'bg-gray-400';
+    
+    const userInscription = creneau.inscriptions?.find(
+      (ins: any) => ins.proclamateur_id === proclamateurData.id
+    );
+    
+    if (userInscription) {
+      return userInscription.confirme ? 'bg-green-500' : 'bg-yellow-500';
+    }
+    
+    return 'bg-blue-500';
+  };
+
+  const getCreneauxByTypeAndTime = () => {
+    const creneauxGrouped: { [key: string]: Creneau[] } = {};
+    
+    creneaux.forEach(creneau => {
+      const key = `${creneau.type_activite_id}-${creneau.heure_debut}-${creneau.heure_fin}`;
+      if (!creneauxGrouped[key]) {
+        creneauxGrouped[key] = [];
+      }
+      creneauxGrouped[key].push(creneau);
+    });
+    
+    return Object.values(creneauxGrouped).filter(group => {
+      if (selectedActivity === 'all') return true;
+      return group[0]?.type_activite_id === selectedActivity;
+    });
+  };
+
   const loadCreneauxSemaineDetails = async (weekStart: Date, weekEnd: Date, typeActiviteId: string): Promise<CreneauDetaille[]> => {
     try {
       const weekStartStr = format(weekStart, 'yyyy-MM-dd');
@@ -259,8 +304,18 @@ const PlanningMensuel = ({ selectedMonth, onMonthChange }: PlanningMensuelProps)
     }
   };
 
-  const handleCellClick = async (weekStart: Date, weekEnd: Date, activite: TypeActivite) => {
-    const creneauxSemaine = await loadCreneauxSemaineDetails(weekStart, weekEnd, activite.id);
+  const handleCellClick = async (weekStart: Date, weekEnd: Date, activite: TypeActivite, creneau?: Creneau) => {
+    let creneauxSemaine: CreneauDetaille[];
+    
+    if (creneau) {
+      // Charger les détails pour ce créneau spécifique
+      creneauxSemaine = await loadCreneauxSemaineDetails(weekStart, weekEnd, activite.id);
+      creneauxSemaine = creneauxSemaine.filter(c => 
+        c.heure_debut === creneau.heure_debut && c.heure_fin === creneau.heure_fin
+      );
+    } else {
+      creneauxSemaine = await loadCreneauxSemaineDetails(weekStart, weekEnd, activite.id);
+    }
     
     setSelectedCellData({
       weekStart,
@@ -327,7 +382,7 @@ const PlanningMensuel = ({ selectedMonth, onMonthChange }: PlanningMensuelProps)
   }
 
   const weekRanges = getWeekRanges();
-  const activitesToShow = selectedActivity === 'all' ? typesActivite : typesActivite.filter(a => a.id === selectedActivity);
+  const creneauxGroups = getCreneauxByTypeAndTime();
 
   return (
     <Card className="gradient-card shadow-soft border-border/50">
@@ -373,14 +428,14 @@ const PlanningMensuel = ({ selectedMonth, onMonthChange }: PlanningMensuelProps)
           </div>
         </div>
 
-        {/* Tableau planning - activités en lignes, semaines en colonnes */}
+        {/* Tableau planning - créneaux en lignes, semaines en colonnes */}
         <div className="overflow-x-auto">
           <table className="w-full border-collapse">
             <thead>
               <tr>
-                <th className="border border-border p-2 text-left font-medium">Activité</th>
+                <th className="border border-border p-2 text-left font-medium min-w-[200px]">Activité / Horaire</th>
                 {weekRanges.map((week, weekIndex) => (
-                  <th key={weekIndex} className="border border-border p-2 text-center font-medium min-w-[150px]">
+                  <th key={weekIndex} className="border border-border p-2 text-center font-medium min-w-[120px]">
                     <div className="text-sm">Semaine {weekIndex + 1}</div>
                     <div className="text-xs text-muted-foreground">
                       {format(week.weekStart, 'd')} - {format(week.weekEnd, 'd MMM', { locale: fr })}
@@ -390,49 +445,74 @@ const PlanningMensuel = ({ selectedMonth, onMonthChange }: PlanningMensuelProps)
               </tr>
             </thead>
             <tbody>
-              {activitesToShow.map((activite) => (
-                <tr key={activite.id}>
-                  <td className="border border-border p-2 font-medium bg-muted/50">
-                    {activite.nom}
-                  </td>
-                  {weekRanges.map((week, weekIndex) => {
-                    const creneauxSemaine = getCreneauxForWeekAndActivity(week.weekStart, week.weekEnd, activite.id);
-                    
-                    return (
-                      <td key={weekIndex} className="border border-border p-2">
-                        <button
-                          onClick={() => handleCellClick(week.weekStart, week.weekEnd, activite)}
-                          className="w-full min-h-[80px] p-2 text-left rounded transition-colors hover:bg-muted/50 border border-dashed border-muted-foreground/30"
-                        >
-                          {creneauxSemaine.length > 0 ? (
-                            <div className="space-y-1">
-                              {creneauxSemaine.slice(0, 3).map((creneau) => (
-                                <div key={creneau.id} className="flex items-center gap-1 text-xs">
-                                  <div className="w-2 h-2 bg-blue-500 rounded-full flex-shrink-0" />
-                                  <span className="truncate">
-                                    {format(new Date(creneau.date_creneau), 'dd/MM')} {formatTime(creneau.heure_debut)}
-                                  </span>
-                                </div>
-                              ))}
-                              {creneauxSemaine.length > 3 && (
-                                <div className="text-xs text-muted-foreground">
-                                  +{creneauxSemaine.length - 3} autres...
-                                </div>
-                              )}
-                            </div>
+              {creneauxGroups.map((creneauxGroup, groupIndex) => {
+                const firstCreneau = creneauxGroup[0];
+                const activite = typesActivite.find(a => a.id === firstCreneau.type_activite_id);
+                
+                return (
+                  <tr key={groupIndex}>
+                    <td className="border border-border p-2 font-medium bg-muted/50">
+                      <div className="text-sm font-medium">{activite?.nom}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {formatTime(firstCreneau.heure_debut)} - {formatTime(firstCreneau.heure_fin)}
+                      </div>
+                    </td>
+                    {weekRanges.map((week, weekIndex) => {
+                      const creneauSemaine = creneauxGroup.find(c => getCreneauForWeek(week.weekStart, week.weekEnd, c));
+                      
+                      return (
+                        <td key={weekIndex} className="border border-border p-2">
+                          {creneauSemaine ? (
+                            <button
+                              onClick={() => activite && handleCellClick(week.weekStart, week.weekEnd, activite, creneauSemaine)}
+                              className="w-full min-h-[60px] p-2 text-center rounded transition-colors hover:bg-muted/50 border border-dashed border-muted-foreground/30"
+                            >
+                              <div className="flex flex-col items-center gap-1">
+                                <div className={`w-3 h-3 ${getStatusColor(creneauSemaine)} rounded-full flex-shrink-0`} />
+                                <span className="text-xs">
+                                  {format(new Date(creneauSemaine.date_creneau), 'dd/MM')}
+                                </span>
+                                <span className="text-xs text-muted-foreground">
+                                  {creneauSemaine.inscriptions?.length || 0}/{creneauSemaine.max_participants}
+                                </span>
+                              </div>
+                            </button>
                           ) : (
-                            <div className="text-xs text-muted-foreground text-center">
-                              Aucun créneau
+                            <div className="w-full min-h-[60px] flex items-center justify-center">
+                              <span className="text-xs text-muted-foreground">-</span>
                             </div>
                           )}
-                        </button>
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
+        </div>
+
+        {/* Légende des couleurs */}
+        <div className="mt-4 p-4 bg-muted/20 rounded-lg">
+          <h4 className="text-sm font-medium mb-2">Légende des couleurs :</h4>
+          <div className="flex flex-wrap gap-4 text-xs">
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 bg-green-500 rounded-full" />
+              <span>Inscription confirmée</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 bg-yellow-500 rounded-full" />
+              <span>Inscription en attente</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 bg-blue-500 rounded-full" />
+              <span>Créneau disponible</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 bg-gray-400 rounded-full" />
+              <span>Non connecté</span>
+            </div>
+          </div>
         </div>
 
         {/* Modal des détails */}
