@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,10 +11,12 @@ import Layout from "@/components/Layout";
 import { useAuth } from "@/contexts/AuthContext";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Settings, Clock, UserCheck, CalendarDays } from "lucide-react";
-import CreneauxGestion from "@/components/CreneauxGestion";
-import { useCallback } from "react";
+import { Settings, Users, Calendar, Plus, Edit, Trash2 } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import type { Tables } from "@/integrations/supabase/types";
+import { format, addDays, addWeeks, startOfDay, parseISO } from "date-fns";
+import { fr } from "date-fns/locale";
 
 type TypeActivite = Tables<'type_activite'> & {
   valideur?: {
@@ -24,7 +26,10 @@ type TypeActivite = Tables<'type_activite'> & {
 };
 
 type Profile = Tables<'profiles'>;
-
+type Creneau = Tables<'creneaux'> & {
+  type_activite: Tables<'type_activite'>;
+  inscriptions_count?: number;
+};
 
 const JOURS_SEMAINE = [
   { value: 0, label: "Dimanche" },
@@ -36,22 +41,48 @@ const JOURS_SEMAINE = [
   { value: 6, label: "Samedi" }
 ];
 
-const SEMAINES_MOIS = [
-  { value: 1, label: "1ère semaine" },
-  { value: 2, label: "2ème semaine" },
-  { value: 3, label: "3ème semaine" },
-  { value: 4, label: "4ème semaine" }
+const FREQUENCES = [
+  { value: "weekly", label: "Hebdomadaire" },
+  { value: "biweekly", label: "Toutes les 2 semaines" },
+  { value: "monthly", label: "Mensuel" }
 ];
+
+interface CreneauRecurrent {
+  jour: number;
+  heure_debut: string;
+  heure_fin: string;
+  frequence: "weekly" | "biweekly" | "monthly";
+  date_fin: string;
+  min_participants?: number;
+  max_participants?: number;
+  notes?: string;
+}
 
 const Parametrage = () => {
   const { toast } = useToast();
   const { user } = useAuth();
   const [typesActivite, setTypesActivite] = useState<TypeActivite[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [creneaux, setCreneaux] = useState<Creneau[]>([]);
   const [loading, setLoading] = useState(true);
-  const [selectedType, setSelectedType] = useState<TypeActivite | null>(null);
+  const [selectedTypeId, setSelectedTypeId] = useState<string>("");
+  const [isCreneauDialogOpen, setIsCreneauDialogOpen] = useState(false);
+  const [editingCreneau, setEditingCreneau] = useState<Creneau | null>(null);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  
+  // Formulaire pour créneau récurrent
+  const [creneauRecurrent, setCreneauRecurrent] = useState<CreneauRecurrent>({
+    jour: 1,
+    heure_debut: "09:00",
+    heure_fin: "10:00",
+    frequence: "weekly",
+    date_fin: "",
+    min_participants: 1,
+    max_participants: 2,
+    notes: ""
+  });
 
- 
+  const selectedType = typesActivite.find(t => t.id === selectedTypeId);
 
   const fetchData = useCallback(async () => {
     try {
@@ -64,6 +95,7 @@ const Parametrage = () => {
           *,
           valideur:profiles!valideur_id(nom, prenom)
         `)
+        .eq('actif', true)
         .order('nom');
 
       if (typesError) throw typesError;
@@ -79,6 +111,11 @@ const Parametrage = () => {
 
       setTypesActivite(typesData || []);
       setProfiles(profilesData || []);
+      
+      // Sélectionner le premier type par défaut
+      if (typesData && typesData.length > 0 && !selectedTypeId) {
+        setSelectedTypeId(typesData[0].id);
+      }
     } catch (error) {
       console.error('Erreur lors du chargement:', error);
       toast({
@@ -89,32 +126,60 @@ const Parametrage = () => {
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  }, [toast, selectedTypeId]);
+
+  const fetchCreneaux = useCallback(async () => {
+    if (!selectedTypeId) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('creneaux')
+        .select(`
+          *,
+          type_activite(nom),
+          inscriptions(count)
+        `)
+        .eq('type_activite_id', selectedTypeId)
+        .eq('actif', true)
+        .order('date_creneau')
+        .order('heure_debut');
+
+      if (error) throw error;
+      setCreneaux(data || []);
+    } catch (error) {
+      console.error('Erreur lors du chargement des créneaux:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de charger les créneaux",
+        variant: "destructive",
+      });
+    }
+  }, [selectedTypeId, toast]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-  const saveTypeActivite = async (typeActivite: TypeActivite) => {
+  useEffect(() => {
+    if (selectedTypeId) {
+      fetchCreneaux();
+    }
+  }, [selectedTypeId, fetchCreneaux]);
+
+  const saveTypeActivite = async (updates: Partial<TypeActivite>) => {
+    if (!selectedType) return;
+
     try {
       const { error } = await supabase
         .from('type_activite')
-        .update({
-          valideur_id: typeActivite.valideur_id,
-          recurrence_enabled: typeActivite.recurrence_enabled,
-          recurrence_days: typeActivite.recurrence_days,
-          recurrence_weeks: typeActivite.recurrence_weeks,
-          default_heure_debut: typeActivite.default_heure_debut,
-          default_heure_fin: typeActivite.default_heure_fin,
-          auto_create_slots: typeActivite.auto_create_slots
-        })
-        .eq('id', typeActivite.id);
+        .update(updates)
+        .eq('id', selectedType.id);
 
       if (error) throw error;
 
       toast({
         title: "Succès",
-        description: "Paramétrage sauvegardé avec succès",
+        description: "Paramètres sauvegardés avec succès",
       });
 
       await fetchData();
@@ -128,32 +193,156 @@ const Parametrage = () => {
     }
   };
 
-  const handleRecurrenceDayChange = (day: number, checked: boolean) => {
+  const createCreneauxRecurrents = async () => {
     if (!selectedType) return;
 
-    const currentDays = selectedType.recurrence_days || [];
-    const newDays = checked
-      ? [...currentDays, day].sort()
-      : currentDays.filter(d => d !== day);
+    try {
+      const dateDebut = new Date();
+      const dateFin = parseISO(creneauRecurrent.date_fin);
+      const creneauxToCreate = [];
 
-    setSelectedType({
-      ...selectedType,
-      recurrence_days: newDays
-    });
+      let currentDate = startOfDay(dateDebut);
+      
+      // Ajuster la date de début au jour de la semaine souhaité
+      while (currentDate.getDay() !== creneauRecurrent.jour) {
+        currentDate = addDays(currentDate, 1);
+      }
+
+      while (currentDate <= dateFin) {
+        creneauxToCreate.push({
+          type_activite_id: selectedType.id,
+          date_creneau: format(currentDate, 'yyyy-MM-dd'),
+          heure_debut: creneauRecurrent.heure_debut,
+          heure_fin: creneauRecurrent.heure_fin,
+          min_participants: creneauRecurrent.min_participants || 1,
+          max_participants: creneauRecurrent.max_participants || 2,
+          notes: creneauRecurrent.notes || null,
+          actif: true
+        });
+
+        // Calculer la prochaine occurrence selon la fréquence
+        switch (creneauRecurrent.frequence) {
+          case "weekly":
+            currentDate = addWeeks(currentDate, 1);
+            break;
+          case "biweekly":
+            currentDate = addWeeks(currentDate, 2);
+            break;
+          case "monthly":
+            currentDate = addWeeks(currentDate, 4);
+            break;
+        }
+      }
+
+      if (creneauxToCreate.length === 0) {
+        toast({
+          title: "Attention",
+          description: "Aucun créneau à créer avec ces paramètres",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const { error } = await supabase
+        .from('creneaux')
+        .insert(creneauxToCreate);
+
+      if (error) throw error;
+
+      toast({
+        title: "Succès",
+        description: `${creneauxToCreate.length} créneaux créés avec succès`,
+      });
+
+      setIsCreneauDialogOpen(false);
+      await fetchCreneaux();
+
+      // Réinitialiser le formulaire
+      setCreneauRecurrent({
+        jour: 1,
+        heure_debut: "09:00",
+        heure_fin: "10:00",
+        frequence: "weekly",
+        date_fin: "",
+        min_participants: 1,
+        max_participants: 2,
+        notes: ""
+      });
+
+    } catch (error) {
+      console.error('Erreur lors de la création des créneaux:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de créer les créneaux récurrents",
+        variant: "destructive",
+      });
+    }
   };
 
-  const handleRecurrenceWeekChange = (week: number, checked: boolean) => {
-    if (!selectedType) return;
+  const deleteCreneau = async (creneauId: string) => {
+    try {
+      const { error } = await supabase
+        .from('creneaux')
+        .update({ actif: false })
+        .eq('id', creneauId);
 
-    const currentWeeks = selectedType.recurrence_weeks || [];
-    const newWeeks = checked
-      ? [...currentWeeks, week].sort()
-      : currentWeeks.filter(w => w !== week);
+      if (error) throw error;
 
-    setSelectedType({
-      ...selectedType,
-      recurrence_weeks: newWeeks
-    });
+      toast({
+        title: "Succès",
+        description: "Créneau supprimé avec succès",
+      });
+
+      await fetchCreneaux();
+    } catch (error) {
+      console.error('Erreur lors de la suppression:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de supprimer le créneau",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const openEditDialog = (creneau: Creneau) => {
+    setEditingCreneau(creneau);
+    setIsEditDialogOpen(true);
+  };
+
+  const updateCreneau = async () => {
+    if (!editingCreneau) return;
+
+    try {
+      const { error } = await supabase
+        .from('creneaux')
+        .update({
+          date_creneau: editingCreneau.date_creneau,
+          heure_debut: editingCreneau.heure_debut,
+          heure_fin: editingCreneau.heure_fin,
+          min_participants: editingCreneau.min_participants,
+          max_participants: editingCreneau.max_participants,
+          notes: editingCreneau.notes
+        })
+        .eq('id', editingCreneau.id);
+
+      if (error) throw error;
+
+      toast({
+        title: "Succès",
+        description: "Créneau modifié avec succès",
+      });
+
+      setIsEditDialogOpen(false);
+      setEditingCreneau(null);
+      await fetchCreneaux();
+    } catch (error) {
+      console.error('Erreur lors de la modification:', error);
+      toast({
+        title: "Erreur",
+        description: "Impossible de modifier le créneau",
+        variant: "destructive",
+      });
+    }
   };
 
   if (loading) {
@@ -174,220 +363,409 @@ const Parametrage = () => {
           <h1 className="text-2xl font-bold">Paramétrage</h1>
         </div>
 
-        <Tabs defaultValue="valideurs" className="w-full">
-          <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="valideurs" className="flex items-center gap-2">
-              <UserCheck className="h-4 w-4" />
-              Valideurs
-            </TabsTrigger>
-            <TabsTrigger value="recurrence" className="flex items-center gap-2">
-              <Clock className="h-4 w-4" />
-              Créneaux récurrents
-            </TabsTrigger>
-            <TabsTrigger value="creneaux" className="flex items-center gap-2">
-              <CalendarDays className="h-4 w-4" />
-              Gestion créneaux
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="valideurs" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Configuration des valideurs d'inscriptions</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4">
+        {/* Sélecteur de type d'activité en en-tête */}
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>Type d'activité</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Select value={selectedTypeId} onValueChange={setSelectedTypeId}>
+              <SelectTrigger className="w-full max-w-md">
+                <SelectValue placeholder="Sélectionner un type d'activité" />
+              </SelectTrigger>
+              <SelectContent>
                 {typesActivite.map((type) => (
-                  <div key={type.id} className="flex items-center justify-between p-4 border rounded-lg">
-                    <div>
-                      <h3 className="font-medium">{type.nom}</h3>
-                      {type.description && (
-                        <p className="text-sm text-muted-foreground">{type.description}</p>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-4">
-                      {type.valideur && (
+                  <SelectItem key={type.id} value={type.id}>
+                    {type.nom}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </CardContent>
+        </Card>
+
+        {selectedType && (
+          <Tabs defaultValue="parametres" className="w-full">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="parametres" className="flex items-center gap-2">
+                <Users className="h-4 w-4" />
+                Paramètres généraux
+              </TabsTrigger>
+              <TabsTrigger value="creneaux" className="flex items-center gap-2">
+                <Calendar className="h-4 w-4" />
+                Créneaux
+              </TabsTrigger>
+            </TabsList>
+
+            {/* Onglet Paramètres généraux */}
+            <TabsContent value="parametres" className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Configuration - {selectedType.nom}</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  {/* Valideur */}
+                  <div>
+                    <Label>Valideur des inscriptions</Label>
+                    <div className="flex items-center gap-4 mt-2">
+                      {selectedType.valideur && (
                         <Badge variant="secondary">
-                          {type.valideur.prenom} {type.valideur.nom}
+                          {selectedType.valideur.prenom} {selectedType.valideur.nom}
                         </Badge>
                       )}
-                      <Select value={type.valideur_id && type.valideur_id !== "" ? type.valideur_id : "none"} onValueChange={(value) => {
-                          const updatedType = { ...type, valideur_id: value === "none" ? null : value };
-                          saveTypeActivite(updatedType);
-                      }}>
-                          <SelectTrigger className="w-48">
-                              <SelectValue placeholder="Sélectionner un valideur" />
-                          </SelectTrigger>
-                          <SelectContent>
-                              <SelectItem value="none">Aucun valideur</SelectItem>
-                              {profiles.filter(profile => profile.id && profile.id.trim() !== "").map((profile) => (
-                                  <SelectItem key={profile.id} value={profile.id}>
-                                      {profile.prenom} {profile.nom} ({profile.role})
-                                  </SelectItem>
-                              ))}
-                          </SelectContent>
+                      <Select 
+                        value={selectedType.valideur_id && selectedType.valideur_id !== "" ? selectedType.valideur_id : "none"} 
+                        onValueChange={(value) => {
+                          saveTypeActivite({ valideur_id: value === "none" ? null : value });
+                        }}
+                      >
+                        <SelectTrigger className="w-64">
+                          <SelectValue placeholder="Sélectionner un valideur" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="none">Aucun valideur</SelectItem>
+                          {profiles.filter(profile => profile.id && profile.id.trim() !== "").map((profile) => (
+                            <SelectItem key={profile.id} value={profile.id}>
+                              {profile.prenom} {profile.nom} ({profile.role})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
                       </Select>
                     </div>
                   </div>
-                ))}
-              </CardContent>
-            </Card>
-          </TabsContent>
 
-          <TabsContent value="recurrence" className="space-y-4">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Types d'activité</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
-                    {typesActivite.map((type) => (
-                      <div
-                        key={type.id}
-                        className={`p-3 border rounded-lg cursor-pointer transition-colors ${
-                          selectedType?.id === type.id
-                            ? 'border-primary bg-primary/5'
-                            : 'hover:bg-muted/50'
-                        }`}
-                        onClick={() => setSelectedType(type)}
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="font-medium">{type.nom}</span>
-                          {(type.recurrence_enabled ?? false) && (
-                            <Badge variant="outline">Récurrence activée</Badge>
-                          )}
-                        </div>
-                      </div>
-                    ))}
+                  {/* Horaires par défaut */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="heure-debut">Heure de début par défaut</Label>
+                      <Input
+                        id="heure-debut"
+                        type="time"
+                        value={selectedType.default_heure_debut || ""}
+                        onChange={(e) => {
+                          const newType = { ...selectedType, default_heure_debut: e.target.value };
+                          setTypesActivite(prev => prev.map(t => t.id === selectedType.id ? newType : t));
+                        }}
+                        onBlur={() => {
+                          saveTypeActivite({ default_heure_debut: selectedType.default_heure_debut });
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="heure-fin">Heure de fin par défaut</Label>
+                      <Input
+                        id="heure-fin"
+                        type="time"
+                        value={selectedType.default_heure_fin || ""}
+                        onChange={(e) => {
+                          const newType = { ...selectedType, default_heure_fin: e.target.value };
+                          setTypesActivite(prev => prev.map(t => t.id === selectedType.id ? newType : t));
+                        }}
+                        onBlur={() => {
+                          saveTypeActivite({ default_heure_fin: selectedType.default_heure_fin });
+                        }}
+                      />
+                    </div>
                   </div>
+
+                  {/* Description */}
+                  <div>
+                    <Label htmlFor="description">Description</Label>
+                    <Input
+                      id="description"
+                      value={selectedType.description || ""}
+                      onChange={(e) => {
+                        const newType = { ...selectedType, description: e.target.value };
+                        setTypesActivite(prev => prev.map(t => t.id === selectedType.id ? newType : t));
+                      }}
+                      onBlur={() => {
+                        saveTypeActivite({ description: selectedType.description });
+                      }}
+                      placeholder="Description de l'activité"
+                    />
+                  </div>
+
+                  <Button 
+                    onClick={() => saveTypeActivite(selectedType)}
+                    className="w-full"
+                  >
+                    Sauvegarder les paramètres
+                  </Button>
                 </CardContent>
               </Card>
+            </TabsContent>
 
-              {selectedType && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Configuration - {selectedType.nom}</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-6">
-                    <div className="flex items-center space-x-2">
-                      <Checkbox
-                        id="recurrence"
-                        checked={selectedType.recurrence_enabled ?? false}
-                        onCheckedChange={(checked) =>
-                          setSelectedType({
-                            ...selectedType,
-                            recurrence_enabled: checked as boolean
-                          })
-                        }
-                      />
-                      <Label htmlFor="recurrence">Activer la récurrence</Label>
-                    </div>
-
-                    {(selectedType.recurrence_enabled ?? false) && (
-                      <>
-                        <div>
-                          <Label className="text-sm font-medium">Jours de la semaine</Label>
-                          <div className="grid grid-cols-2 gap-2 mt-2">
-                            {JOURS_SEMAINE.map((jour) => (
-                              <div key={jour.value} className="flex items-center space-x-2">
-                                <Checkbox
-                                  id={`jour-${jour.value}`}
-                                  checked={selectedType.recurrence_days?.includes(jour.value) ?? false}
-                                  onCheckedChange={(checked) =>
-                                    handleRecurrenceDayChange(jour.value, checked as boolean)
-                                  }
-                                />
-                                <Label htmlFor={`jour-${jour.value}`} className="text-sm">
-                                  {jour.label}
-                                </Label>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-
-                        <div>
-                          <Label className="text-sm font-medium">Semaines du mois</Label>
-                          <div className="grid grid-cols-2 gap-2 mt-2">
-                            {SEMAINES_MOIS.map((semaine) => (
-                              <div key={semaine.value} className="flex items-center space-x-2">
-                                <Checkbox
-                                  id={`semaine-${semaine.value}`}
-                                  checked={selectedType.recurrence_weeks?.includes(semaine.value) ?? false}
-                                  onCheckedChange={(checked) =>
-                                    handleRecurrenceWeekChange(semaine.value, checked as boolean)
-                                  }
-                                />
-                                <Label htmlFor={`semaine-${semaine.value}`} className="text-sm">
-                                  {semaine.label}
-                                </Label>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-4">
-                          <div>
-                            <Label htmlFor="heure-debut">Heure de début</Label>
-                            <Input
-                              id="heure-debut"
-                              type="time"
-                              value={selectedType.default_heure_debut || ""}
-                              onChange={(e) =>
-                                setSelectedType({
-                                  ...selectedType,
-                                  default_heure_debut: e.target.value
-                                })
-                              }
-                            />
-                          </div>
-                          <div>
-                            <Label htmlFor="heure-fin">Heure de fin</Label>
-                            <Input
-                              id="heure-fin"
-                              type="time"
-                              value={selectedType.default_heure_fin || ""}
-                              onChange={(e) =>
-                                setSelectedType({
-                                  ...selectedType,
-                                  default_heure_fin: e.target.value
-                                })
-                              }
-                            />
-                          </div>
-                        </div>
-
-                        <div className="flex items-center space-x-2">
-                          <Checkbox
-                            id="auto-create"
-                            checked={selectedType.auto_create_slots ?? false}
-                            onCheckedChange={(checked) =>
-                              setSelectedType({
-                                ...selectedType,
-                                auto_create_slots: checked as boolean
-                              })
-                            }
-                          />
-                          <Label htmlFor="auto-create">Créer automatiquement les créneaux</Label>
-                        </div>
-                      </>
-                    )}
-
-                    <Button
-                      onClick={() => saveTypeActivite(selectedType)}
-                      className="w-full"
-                    >
-                      Sauvegarder
+            {/* Onglet Créneaux */}
+            <TabsContent value="creneaux" className="space-y-4">
+              <div className="flex justify-between items-center">
+                <h3 className="text-lg font-medium">Créneaux planifiés</h3>
+                <Dialog open={isCreneauDialogOpen} onOpenChange={setIsCreneauDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Créer des créneaux récurrents
                     </Button>
-                  </CardContent>
-                </Card>
-              )}
-            </div>
-          </TabsContent>
+                  </DialogTrigger>
+                  <DialogContent className="max-w-md">
+                    <DialogHeader>
+                      <DialogTitle>Créer des créneaux récurrents</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                      <div>
+                        <Label>Jour de la semaine</Label>
+                        <Select 
+                          value={creneauRecurrent.jour.toString()} 
+                          onValueChange={(value) => setCreneauRecurrent({...creneauRecurrent, jour: parseInt(value)})}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {JOURS_SEMAINE.map((jour) => (
+                              <SelectItem key={jour.value} value={jour.value.toString()}>
+                                {jour.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
 
-          <TabsContent value="creneaux" className="space-y-4">
-            <CreneauxGestion />
-          </TabsContent>
-        </Tabs>
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label>Heure début</Label>
+                          <Input
+                            type="time"
+                            value={creneauRecurrent.heure_debut}
+                            onChange={(e) => setCreneauRecurrent({...creneauRecurrent, heure_debut: e.target.value})}
+                          />
+                        </div>
+                        <div>
+                          <Label>Heure fin</Label>
+                          <Input
+                            type="time"
+                            value={creneauRecurrent.heure_fin}
+                            onChange={(e) => setCreneauRecurrent({...creneauRecurrent, heure_fin: e.target.value})}
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <Label>Fréquence</Label>
+                        <Select 
+                          value={creneauRecurrent.frequence} 
+                          onValueChange={(value: "weekly" | "biweekly" | "monthly") => 
+                            setCreneauRecurrent({...creneauRecurrent, frequence: value})
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {FREQUENCES.map((freq) => (
+                              <SelectItem key={freq.value} value={freq.value}>
+                                {freq.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div>
+                        <Label>Date de fin</Label>
+                        <Input
+                          type="date"
+                          value={creneauRecurrent.date_fin}
+                          onChange={(e) => setCreneauRecurrent({...creneauRecurrent, date_fin: e.target.value})}
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label>Min participants</Label>
+                          <Input
+                            type="number"
+                            min="1"
+                            value={creneauRecurrent.min_participants}
+                            onChange={(e) => setCreneauRecurrent({...creneauRecurrent, min_participants: parseInt(e.target.value)})}
+                          />
+                        </div>
+                        <div>
+                          <Label>Max participants</Label>
+                          <Input
+                            type="number"
+                            min="1"
+                            value={creneauRecurrent.max_participants}
+                            onChange={(e) => setCreneauRecurrent({...creneauRecurrent, max_participants: parseInt(e.target.value)})}
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <Label>Notes (optionnel)</Label>
+                        <Input
+                          value={creneauRecurrent.notes}
+                          onChange={(e) => setCreneauRecurrent({...creneauRecurrent, notes: e.target.value})}
+                          placeholder="Notes pour ces créneaux"
+                        />
+                      </div>
+
+                      <Button 
+                        onClick={createCreneauxRecurrents} 
+                        className="w-full"
+                        disabled={!creneauRecurrent.date_fin}
+                      >
+                        Créer les créneaux
+                      </Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              </div>
+
+              {/* Dialog d'édition de créneau */}
+              <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+                <DialogContent className="max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Modifier le créneau</DialogTitle>
+                  </DialogHeader>
+                  {editingCreneau && (
+                    <div className="space-y-4">
+                      <div>
+                        <Label>Date</Label>
+                        <Input
+                          type="date"
+                          value={editingCreneau.date_creneau}
+                          onChange={(e) => setEditingCreneau({...editingCreneau, date_creneau: e.target.value})}
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label>Heure début</Label>
+                          <Input
+                            type="time"
+                            value={editingCreneau.heure_debut}
+                            onChange={(e) => setEditingCreneau({...editingCreneau, heure_debut: e.target.value})}
+                          />
+                        </div>
+                        <div>
+                          <Label>Heure fin</Label>
+                          <Input
+                            type="time"
+                            value={editingCreneau.heure_fin}
+                            onChange={(e) => setEditingCreneau({...editingCreneau, heure_fin: e.target.value})}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <Label>Min participants</Label>
+                          <Input
+                            type="number"
+                            min="1"
+                            value={editingCreneau.min_participants}
+                            onChange={(e) => setEditingCreneau({...editingCreneau, min_participants: parseInt(e.target.value)})}
+                          />
+                        </div>
+                        <div>
+                          <Label>Max participants</Label>
+                          <Input
+                            type="number"
+                            min="1"
+                            value={editingCreneau.max_participants}
+                            onChange={(e) => setEditingCreneau({...editingCreneau, max_participants: parseInt(e.target.value)})}
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <Label>Notes (optionnel)</Label>
+                        <Input
+                          value={editingCreneau.notes || ""}
+                          onChange={(e) => setEditingCreneau({...editingCreneau, notes: e.target.value})}
+                          placeholder="Notes pour ce créneau"
+                        />
+                      </div>
+
+                      <div className="flex gap-2">
+                        <Button variant="outline" onClick={() => setIsEditDialogOpen(false)} className="flex-1">
+                          Annuler
+                        </Button>
+                        <Button onClick={updateCreneau} className="flex-1">
+                          Sauvegarder
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </DialogContent>
+              </Dialog>
+
+              {/* Liste des créneaux */}
+              <div className="grid gap-4">
+                {creneaux.map((creneau) => (
+                  <Card key={creneau.id}>
+                    <CardContent className="pt-6">
+                      <div className="flex justify-between items-start">
+                        <div>
+                          <div className="font-medium">
+                            {format(parseISO(creneau.date_creneau), 'EEEE d MMMM yyyy', { locale: fr })}
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            {creneau.heure_debut} - {creneau.heure_fin}
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            {creneau.min_participants} - {creneau.max_participants} participants
+                          </div>
+                          {creneau.notes && (
+                            <div className="text-sm text-muted-foreground mt-1">
+                              {creneau.notes}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Button variant="outline" size="sm" onClick={() => openEditDialog(creneau)}>
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="outline" size="sm">
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Supprimer le créneau</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  Êtes-vous sûr de vouloir supprimer ce créneau ? Cette action ne peut pas être annulée.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Annuler</AlertDialogCancel>
+                                <AlertDialogAction onClick={() => deleteCreneau(creneau.id)}>
+                                  Supprimer
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+
+                {creneaux.length === 0 && (
+                  <Card>
+                    <CardContent className="pt-6 text-center text-muted-foreground">
+                      Aucun créneau planifié pour ce type d'activité.
+                      <br />
+                      Utilisez le bouton "Créer des créneaux récurrents" pour commencer.
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+            </TabsContent>
+          </Tabs>
+        )}
       </div>
     </Layout>
   );
