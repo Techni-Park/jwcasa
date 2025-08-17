@@ -17,6 +17,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import type { Tables } from "@/integrations/supabase/types";
 import { format, addDays, addWeeks, startOfDay, parseISO, isValid } from "date-fns";
 import { fr } from "date-fns/locale";
+import { formatTime } from "@/lib/timeUtils";
 
 type TypeActivite = Tables<'type_activite'> & {
   valideur?: {
@@ -749,7 +750,7 @@ const Parametrage = () => {
                             {formatDateSafe(creneau.date_creneau)}
                           </div>
                           <div className="text-sm text-muted-foreground">
-                            {creneau.heure_debut} - {creneau.heure_fin}
+                            {formatTime(creneau.heure_debut)} - {formatTime(creneau.heure_fin)}
                           </div>
                           <div className="text-sm text-muted-foreground">
                             {creneau.min_participants} - {creneau.max_participants} participants

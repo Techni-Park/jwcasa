@@ -10,6 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Plus, Pencil, Trash2, Calendar, Clock } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
+import { formatTime } from "@/lib/timeUtils";
 
 interface Creneau {
   id: string;
@@ -467,7 +468,7 @@ const CreneauxGestion = () => {
                     </div>
                     <div className="flex items-center gap-2">
                       <Clock className="h-4 w-4 text-muted-foreground" />
-                      <span>{creneau.heure_debut} - {creneau.heure_fin}</span>
+                      <span>{formatTime(creneau.heure_debut)} - {formatTime(creneau.heure_fin)}</span>
                     </div>
                     <Badge variant="outline">{creneau.type_activite?.nom}</Badge>
                     {!creneau.actif && <Badge variant="destructive">Inactif</Badge>}

@@ -10,6 +10,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { formatTime } from '@/lib/timeUtils';
 
 interface PendingInscription {
   id: string;
@@ -66,6 +67,7 @@ const AdminPanel = () => {
   const [rapports, setRapports] = useState<Rapport[]>([]);
   const [loading, setLoading] = useState(true);
   const [userRole, setUserRole] = useState<string | null>(null);
+  const [creneauxManquants, setCreneauxManquants] = useState<number>(0);
 
   useEffect(() => {
     if (user) {
@@ -78,8 +80,49 @@ const AdminPanel = () => {
       loadPendingInscriptions();
       loadAllInscriptions();
       loadReports();
+      loadCreneauxManquants();
     }
   }, [userRole]);
+
+  const loadCreneauxManquants = async () => {
+    try {
+      // Récupérer tous les créneaux actifs futurs
+      const today = new Date().toISOString().split('T')[0];
+      
+      const { data: creneaux, error } = await supabase
+        .from('creneaux')
+        .select('id, min_participants')
+        .eq('actif', true)
+        .gte('date_creneau', today);
+
+      if (error) throw error;
+
+      // Compter les créneaux qui n'ont pas assez d'inscriptions confirmées
+      const creneauxAvecStats = await Promise.all(
+        (creneaux || []).map(async (creneau) => {
+          const { data: inscriptionsConfirmees } = await supabase
+            .from('inscriptions')
+            .select('id')
+            .eq('creneau_id', creneau.id)
+            .eq('confirme', true);
+          
+          return {
+            ...creneau,
+            inscriptionsConfirmees: inscriptionsConfirmees?.length || 0
+          };
+        })
+      );
+
+      const creneauxManquantsCount = creneauxAvecStats.filter(
+        creneau => creneau.inscriptionsConfirmees < (creneau.min_participants || 1)
+      ).length;
+
+      setCreneauxManquants(creneauxManquantsCount);
+    } catch (error) {
+      console.error('Erreur lors du chargement des créneaux manquants:', error);
+      setCreneauxManquants(0);
+    }
+  };
 
   const checkUserRole = async () => {
     try {
@@ -306,7 +349,7 @@ const AdminPanel = () => {
   // Calcul des statistiques
   const stats = {
     inscriptionsEnAttente: pendingInscriptions.length,
-    inscriptionsValidees: 0, // TODO: Calculate confirmed inscriptions
+    creneauxManquants: creneauxManquants,
     rapportsMois: rapports.filter(r => {
       const rapportDate = new Date(r.date);
       const now = new Date();
@@ -363,10 +406,10 @@ const AdminPanel = () => {
           color="warning"
         />
         <StatsCard
-          title="Validées"
-          value={stats.inscriptionsValidees}
-          icon={<span className="text-lg">✅</span>}
-          color="success"
+          title="Inscriptions manquantes"
+          value={stats.creneauxManquants}
+          icon={<span className="text-lg">⚠️</span>}
+          color="warning"
         />
         <StatsCard
           title="Rapports mois"
@@ -443,7 +486,7 @@ const AdminPanel = () => {
                                  }
                                </p>
                                <p className="text-sm text-muted-foreground">
-                                 Heure: {inscription.creneaux?.heure_debut || 'Non spécifiée'} - {inscription.creneaux?.heure_fin || 'Non spécifiée'}
+                                 Heure: {formatTime(inscription.creneaux?.heure_debut) || 'Non spécifiée'} - {formatTime(inscription.creneaux?.heure_fin) || 'Non spécifiée'}
                                </p>
                                <p className="text-xs text-muted-foreground">
                                  Inscription le: {format(new Date(inscription.date_inscription), 'dd/MM/yyyy à HH:mm', { locale: fr })}

@@ -14,6 +14,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import type { Tables } from '@/integrations/supabase/types';
+import { formatTime } from '@/lib/timeUtils';
 
 type InscriptionConfirmee = Tables<'inscriptions'> & {
   creneaux: Tables<'creneaux'> & {
@@ -123,7 +124,7 @@ const MesInscriptionsConfirmees = () => {
               <div className="text-sm text-muted-foreground">
                 {format(new Date(inscription.creneaux?.date_creneau), 'EEEE d MMMM yyyy', { locale: fr })}
                 {' • '}
-                {inscription.creneaux?.heure_debut} - {inscription.creneaux?.heure_fin}
+                {formatTime(inscription.creneaux?.heure_debut)} - {formatTime(inscription.creneaux?.heure_fin)}
               </div>
               {inscription.notes && (
                 <div className="text-sm text-muted-foreground mt-1">
@@ -234,7 +235,7 @@ const MesInscriptionsEnAttente = () => {
               <div className="text-sm text-muted-foreground">
                 {format(new Date(inscription.creneaux?.date_creneau), 'EEEE d MMMM yyyy', { locale: fr })}
                 {' • '}
-                {inscription.creneaux?.heure_debut} - {inscription.creneaux?.heure_fin}
+                {formatTime(inscription.creneaux?.heure_debut)} - {formatTime(inscription.creneaux?.heure_fin)}
               </div>
               {inscription.notes && (
                 <div className="text-sm text-muted-foreground mt-1">

@@ -17,6 +17,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import type { Tables } from '@/integrations/supabase/types';
+import { formatTime } from '@/lib/timeUtils';
 
 type InscriptionAvecCreneau = Tables<'inscriptions'> & {
   creneaux: Tables<'creneaux'> & {
@@ -32,12 +33,6 @@ type CreneauDisponible = Tables<'creneaux'> & {
 
 type Profile = Tables<'profiles'>;
 type Proclamateur = Tables<'proclamateurs'>;
-
-// Fonction utilitaire pour formater l'heure sans les secondes
-const formatTime = (timeString: string) => {
-  if (!timeString) return '';
-  return timeString.substring(0, 5); // Garde seulement HH:MM
-};
 
 const MesInscriptions = ({ proclamateurId }: { proclamateurId: string }) => {
   const [inscriptionsEnAttente, setInscriptionsEnAttente] = useState<InscriptionAvecCreneau[]>([]);
