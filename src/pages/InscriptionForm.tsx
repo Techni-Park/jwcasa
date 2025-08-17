@@ -324,6 +324,11 @@ const InscriptionForm = () => {
         throw error;
       }
       setTypeActivites(data || []);
+      
+      // Sélectionner par défaut le premier type d'activité disponible
+      if (data && data.length > 0 && !formData.type_activite_id) {
+        setFormData(prev => ({ ...prev, type_activite_id: data[0].id }));
+      }
     } catch (error) {
       console.error('Erreur lors du chargement des types d\'activité:', error);
     }
@@ -626,10 +631,10 @@ const InscriptionForm = () => {
           </CardContent>
         </Card>
 
-        {/* Layout principal: Calendrier + Créneaux à gauche, Inscriptions à droite */}
+        {/* Layout principal: Calendrier + Inscriptions confirmées à gauche, Créneaux + Inscriptions en attente à droite */}
         {formData.type_activite_id && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Colonne gauche: Calendrier et Créneaux */}
+            {/* Colonne gauche: Calendrier et Inscriptions confirmées */}
             <div className="space-y-6">
               {/* Calendrier */}
               <Card className="gradient-card shadow-soft border-border/50">
@@ -658,6 +663,43 @@ const InscriptionForm = () => {
                 </CardContent>
               </Card>
 
+              {/* Mes inscriptions confirmées */}
+              {proclamateurData && (
+                <Card className="gradient-card shadow-soft border-border/50 border-l-4 border-l-success">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-foreground">
+                      <span className="text-xl">✅</span>
+                      Mes inscriptions validées
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <MesInscriptionsConfirmees proclamateurId={proclamateurData.id} />
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Notes optionnelles */}
+              {formData.date && (
+                <Card className="gradient-card shadow-soft border-border/50">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2 text-foreground">
+                      <span className="text-xl">📝</span>
+                      Notes (optionnel)
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <Input
+                      value={formData.notes}
+                      onChange={(e) => handleInputChange('notes', e.target.value)}
+                      placeholder="Remarques particulières pour vos inscriptions..."
+                    />
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+
+            {/* Colonne droite: Créneaux disponibles et Inscriptions en attente */}
+            <div className="space-y-6">
               {/* Créneaux disponibles */}
               <Card className="gradient-card shadow-soft border-border/50">
                 <CardHeader>
@@ -781,28 +823,6 @@ const InscriptionForm = () => {
                 </CardContent>
               </Card>
 
-              {/* Notes optionnelles */}
-              {formData.date && (
-                <Card className="gradient-card shadow-soft border-border/50">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-foreground">
-                      <span className="text-xl">📝</span>
-                      Notes (optionnel)
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <Input
-                      value={formData.notes}
-                      onChange={(e) => handleInputChange('notes', e.target.value)}
-                      placeholder="Remarques particulières pour vos inscriptions..."
-                    />
-                  </CardContent>
-                </Card>
-              )}
-            </div>
-
-            {/* Colonne droite: Inscriptions */}
-            <div className="space-y-6">
               {/* Mes inscriptions en attente */}
               {proclamateurData && (
                 <Card className="gradient-card shadow-soft border-border/50 border-l-4 border-l-warning">
@@ -814,21 +834,6 @@ const InscriptionForm = () => {
                   </CardHeader>
                   <CardContent>
                     <MesInscriptions proclamateurId={proclamateurData.id} />
-                  </CardContent>
-                </Card>
-              )}
-
-              {/* Mes inscriptions confirmées */}
-              {proclamateurData && (
-                <Card className="gradient-card shadow-soft border-border/50 border-l-4 border-l-success">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-foreground">
-                      <span className="text-xl">✅</span>
-                      Mes inscriptions validées
-                    </CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    <MesInscriptionsConfirmees proclamateurId={proclamateurData.id} />
                   </CardContent>
                 </Card>
               )}
